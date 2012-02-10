@@ -1,0 +1,12 @@
+.gitignore
+Changes
+LICENSE
+lib/XML/Hash/XS.pm
+Makefile.PL
+MANIFEST
+MANIFEST.SKIP
+README
+t/00-load.t
+t/01-conv.t
+typemap
+XS.xs
