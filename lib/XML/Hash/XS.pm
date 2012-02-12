@@ -19,17 +19,27 @@ sub hash2xml {
     $options{root}     ||= 'root';
     $options{version}  ||= '1.0';
     $options{encoding} ||= 'utf-8';
+    $options{indent}     = $options{indent} ? 1 : 0;
 
     my $output = $options{output} || 'string';
 
     if ( $output eq 'string' ) {
-        _hash2xml2string( $hash, @options{qw( root version encoding )} );
+        _hash2xml2string( $hash, @options{qw( root version encoding indent )} );
     }
-    elsif ( my $fh = openhandle($output) ) {
-        _hash2xml2fh( $fh, $hash, @options{qw( root version encoding )} );
+    elsif ( my $fh = $output ) {
+        _hash2xml2fh( $fh, $hash, @options{qw( root version encoding indent )} );
     }
     else {
         die "Invalid output type: '".ref($output)."'";
+    }
+}
+
+sub __write {
+    if ( ref( $_[0] ) ) {
+        $_[0]->write( $_[1], $_[2] );
+    }
+    else {
+        $_[0]->write( $_[1] );
     }
 }
 
@@ -72,13 +82,19 @@ XML document version
 
 XML output encoding
 
+=item indent [ = 0 ]
+
+if idnent is "1", XML output should be indented according to its hierarchic structure.
+
+if indent is "0", XML output will all be on one line.
+
 =item output [ = undef ]
 
 XML output method
 
-if output is undefined XML document dumped into string.
+if output is undefined, XML document dumped into string.
 
-if output is FH XML document writes directly to a filehandle or a stream.
+if output is FH, XML document writes directly to a filehandle or a stream.
 
 =back
 
