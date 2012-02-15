@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 11;
+use Test::More tests => 12;
 use File::Temp qw(tempfile);
 
 use XML::Hash::XS 'hash2xml';
@@ -100,6 +100,14 @@ EOT
         $data = hash2xml( { node1 => 'Тест' }, encoding => 'cp1251' ),
         qq{<?xml version="1.0" encoding="cp1251"?>\n<root><node1>\322\345\361\362</node1></root>\n},
         'encoding support',
+    ;
+}
+
+{
+    is
+        $data = hash2xml( { node1 => '&<>' } ),
+        qq{$xml\n<root><node1>&amp;&lt;&gt;</node1></root>\n},
+        'escaping',
     ;
 }
 

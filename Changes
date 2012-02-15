@@ -1,5 +1,7 @@
 Revision history for XML::Hash::XS.
 
+0.02    2012-02-15
+        increased performance by 2.5 times via direct conversion to a string without creating a DOM
+
 0.01    2012-02-12
         First version
-

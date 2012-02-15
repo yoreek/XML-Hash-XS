@@ -4,130 +4,22 @@
 
 #include <libxml/parser.h>
 
-#define MAX_TAG_LEN         1024
 #define MAX_RECURSION_DEPTH 128
 #define ARRAY_ITEM_TAG      "item"
+#define INDENT_STEP         2
 
-void XMLHash_hash2xml(xmlNodePtr parentNode, SV * hash);
+typedef enum {
+    TAG_OPEN,
+    TAG_CLOSE,
+    TAG_EMPTY
+} tagType;
 
-static char tag[MAX_TAG_LEN] = {'_'};
-static int  recursion_depth  = 0;
+const char indent_string[60] = "                                                            ";
 
-void
-XMLHash_hash2xml_create_element(
-    xmlNodePtr parentNode, char *key, SV *value)
-{
-    xmlNodePtr node;
-    I32        i, len;
-    int        count;
-    SV        *value_ref;
+void XMLHash_hash2xml(xmlOutputBufferPtr out_buff, SV * hash, int indent);
 
-    if (key[0] >= '1' && key[0] <= '9') {
-        strncpy(&tag[1], key, MAX_TAG_LEN - 1);
-
-        tag[MAX_TAG_LEN - 1] = '\0';
-
-        key = tag;
-    }
-
-    node = xmlNewChild( parentNode, NULL, (const xmlChar *) key, NULL );
-
-    while ( value && SvROK(value) ) {
-        if (++recursion_depth > MAX_RECURSION_DEPTH) {
-            Perl_croak(aTHX_ "Maximum recursion depth exceeded");
-            /*croak("Maximum recursion depth exceeded");*/
-        }
-
-        value_ref = value;
-        value     = SvRV(value);
-
-        if(SvTYPE(value) == SVt_PVCV) {
-            /* code ref */
-            dSP;
-
-            ENTER;
-            SAVETMPS;
-            count = call_sv(value, G_SCALAR);
-
-            SPAGAIN;
-
-            if (count == 1) {
-                value = POPs;
-
-                SvREFCNT_inc(value);
-
-                PUTBACK;
-
-                FREETMPS;
-                LEAVE;
-
-                continue;
-            }
-            else {
-                value = NULL;
-            }
-        }
-    }
-
-    switch (SvTYPE(value)) {
-    case SVt_NULL:
-        ;;
-        break;
-    case SVt_IV:
-    case SVt_PVIV:
-    case SVt_PVNV:
-    case SVt_NV:
-    case SVt_PV:
-        /* integer */
-        /* double */
-        /* scalar */
-        xmlNodeAddContent(node, SvPV_nolen(value));
-        break;
-    case SVt_PVAV:
-        /* array */
-        len = av_len((AV *) value);
-        for (i = 0; i <= len; i++) {
-            XMLHash_hash2xml_create_element(
-                node, ARRAY_ITEM_TAG, *av_fetch((AV *) value, i, 0));
-        }
-        break;
-    case SVt_PVHV:
-        /* hash */
-        XMLHash_hash2xml(node, value_ref);
-        break;
-    case SVt_BIND:
-        break;
-    case SVt_PVMG:
-        /* blessed */
-        if (SvOK(value)) {
-            xmlNodeAddContent(node, SvPV_nolen(value));
-        }
-        break;
-    default:
-        /* undef */
-        break;
-    }
-
-    recursion_depth--;
-}
-
-void
-XMLHash_hash2xml(xmlNodePtr parentNode, SV * hash)
-{
-    SV   *value;
-    char *key;
-    I32   keylen;
-
-    if (!SvROK(hash)) {
-        warn("parameter is not reference\n");
-        return;
-    }
-
-    hv_iterinit((HV *)SvRV(hash));
-    while ((value = hv_iternextsv((HV *)SvRV(hash), &key, &keylen))) {
-        XMLHash_hash2xml_create_element(parentNode, key, value);
-    }
-}
+static int recursion_depth  = 0;
+static int indent_count     = 0;
 
 int
 XMLHash_output_write_handler(void * ioref, char * buffer, int len)
@@ -164,6 +56,156 @@ XMLHash_output_close_handler(void * fh)
     return 1;
 }
 
+void
+XMLHash_hash2xml_write_tag(
+    xmlOutputBufferPtr out_buff, tagType type, char *name, int indent, int lf)
+{
+    int indent_len;
+
+    if (indent) {
+        indent_len = indent_count * INDENT_STEP;
+        if (indent_len > sizeof(indent_string))
+            indent_len = sizeof(indent_string);
+
+        xmlOutputBufferWrite(out_buff, indent_len, indent_string);
+    }
+
+    if (type == TAG_CLOSE) {
+        xmlOutputBufferWrite(out_buff, 2, "</");
+    }
+    else {
+        xmlOutputBufferWrite(out_buff, 1, "<");
+    }
+
+    if (name[0] >= '1' && name[0] <= '9') {
+        xmlOutputBufferWrite(out_buff, 1, "_");
+    }
+    xmlOutputBufferWriteString(out_buff, (xmlChar *) name);
+
+    if (type == TAG_EMPTY) {
+        xmlOutputBufferWrite(out_buff, 2, "/>");
+    }
+    else {
+        xmlOutputBufferWrite(out_buff, 1, ">");
+    }
+
+    if (lf)
+        xmlOutputBufferWrite(out_buff, 1, "\n");
+}
+
+void
+XMLHash_hash2xml_create_element(
+    xmlOutputBufferPtr out_buff, char *name, SV *value, int indent)
+{
+    I32        i, len;
+    int        count;
+    SV        *value_ref;
+
+    indent_count++;
+
+    while ( value && SvROK(value) ) {
+        if (++recursion_depth > MAX_RECURSION_DEPTH) {
+            croak("Maximum recursion depth exceeded");
+        }
+
+        value_ref = value;
+        value     = SvRV(value);
+
+        if(SvTYPE(value) == SVt_PVCV) {
+            /* code ref */
+            dSP;
+
+            ENTER;
+            SAVETMPS;
+            count = call_sv(value, G_SCALAR);
+
+            SPAGAIN;
+
+            if (count == 1) {
+                value = POPs;
+
+                SvREFCNT_inc(value);
+
+                PUTBACK;
+
+                FREETMPS;
+                LEAVE;
+
+                continue;
+            }
+            else {
+                value = NULL;
+            }
+        }
+    }
+
+    switch (SvTYPE(value)) {
+        case SVt_NULL:
+            XMLHash_hash2xml_write_tag(out_buff, TAG_EMPTY, name, indent, indent);
+            break;
+        case SVt_IV:
+        case SVt_PVIV:
+        case SVt_PVNV:
+        case SVt_NV:
+        case SVt_PV:
+            /* integer, double, scalar */
+            XMLHash_hash2xml_write_tag(out_buff, TAG_OPEN, name, indent, 0);
+            xmlOutputBufferWriteEscape(out_buff, (xmlChar *) SvPV_nolen(value), NULL);
+            XMLHash_hash2xml_write_tag(out_buff, TAG_CLOSE, name, 0, indent);
+            break;
+        case SVt_PVAV:
+            /* array */
+            len = av_len((AV *) value);
+            XMLHash_hash2xml_write_tag(out_buff, TAG_OPEN, name, indent, indent);
+
+            for (i = 0; i <= len; i++) {
+                XMLHash_hash2xml_create_element(
+                    out_buff, ARRAY_ITEM_TAG, *av_fetch((AV *) value, i, 0),
+                    indent);
+            }
+
+            XMLHash_hash2xml_write_tag(out_buff, TAG_CLOSE, name, indent, indent);
+            break;
+        case SVt_PVHV:
+            /* hash */
+            XMLHash_hash2xml_write_tag(out_buff, TAG_OPEN, name, indent, indent);
+            XMLHash_hash2xml(out_buff, value_ref, indent);
+            XMLHash_hash2xml_write_tag(out_buff, TAG_CLOSE, name, indent, indent);
+            break;
+        case SVt_PVMG:
+            /* blessed */
+            if (SvOK(value)) {
+                XMLHash_hash2xml_write_tag(out_buff, TAG_OPEN, name, indent, 0);
+                xmlOutputBufferWriteEscape(out_buff, (xmlChar *) SvPV_nolen(value), NULL);
+                XMLHash_hash2xml_write_tag(out_buff, TAG_CLOSE, name, 0, indent);
+                break;
+            }
+        default:
+            XMLHash_hash2xml_write_tag(out_buff, TAG_EMPTY, name, indent, indent);
+    }
+
+    recursion_depth--;
+    indent_count--;
+}
+
+void
+XMLHash_hash2xml(xmlOutputBufferPtr out_buff, SV * hash, int indent)
+{
+    SV   *value;
+    char *key;
+    I32   keylen;
+
+    if (!SvROK(hash)) {
+        warn("parameter is not reference\n");
+        return;
+    }
+
+    hv_iterinit((HV *)SvRV(hash));
+    while ((value = hv_iternextsv((HV *)SvRV(hash), &key, &keylen))) {
+        XMLHash_hash2xml_create_element(out_buff, key, value, indent);
+    }
+}
+
 MODULE = XML::Hash::XS PACKAGE = XML::Hash::XS
 
 SV *
@@ -174,24 +216,52 @@ _hash2xml2string(hash, rootNodeName, version, encoding, indent)
         char *encoding;
         I32   indent;
     INIT:
-        xmlDocPtr  doc    = NULL;
-        xmlChar   *result = NULL;
-        xmlNodePtr node   = NULL;
-        int        len    = 0;
+        xmlChar                   *result    = NULL;
+        int                        len       = 0;
+        xmlOutputBufferPtr         out_buff  = NULL;
+        xmlCharEncodingHandlerPtr  conv_hdlr = NULL;
     CODE:
         RETVAL = &PL_sv_undef;
 
-        doc = xmlNewDoc((const xmlChar*) version);
-        doc->encoding = strdup(encoding);
+        recursion_depth = 0;
+        indent_count    = 0;
 
-        node = xmlNewNode( NULL, (const xmlChar *) rootNodeName );
-        xmlDocSetRootElement(doc, node);
+        conv_hdlr = xmlFindCharEncodingHandler(encoding);
+        if ( conv_hdlr == NULL ) {
+            croak("Unknown encoding");
+        }
 
-        XMLHash_hash2xml(node, hash);
+        if ((out_buff = xmlAllocOutputBuffer(conv_hdlr)) == NULL ) {
+            croak("Creating buffer");
+        }
 
-        xmlDocDumpFormatMemoryEnc(doc, &result, &len, NULL, indent);
+        xmlOutputBufferWrite(out_buff, 14, "<?xml version=");
+        xmlBufferWriteQuotedString(out_buff->buffer, (xmlChar *) version);
+        xmlOutputBufferWrite(out_buff, 10, " encoding=");
+        xmlBufferWriteQuotedString(out_buff->buffer, (xmlChar *) encoding);
+        xmlOutputBufferWrite(out_buff, 3, "?>\n");
 
-        xmlFreeDoc(doc);
+        XMLHash_hash2xml_write_tag(out_buff, TAG_OPEN, rootNodeName, indent, indent);
+        XMLHash_hash2xml(out_buff, hash, indent);
+        XMLHash_hash2xml_write_tag(out_buff, TAG_CLOSE, rootNodeName, indent, 1);
+
+        xmlOutputBufferFlush(out_buff);
+
+        if (out_buff->conv != NULL) {
+            len    = out_buff->conv->use;
+            result = xmlStrndup(out_buff->conv->content, len);
+        }
+        else {
+            len    = out_buff->buffer->use;
+            result = xmlStrndup(out_buff->buffer->content, len);
+        }
+
+        (void) xmlOutputBufferClose(out_buff);
+
+        if ((result == NULL) && (len > 0)) {
+            len = 0;
+            croak("Creating output");
+        }
 
         if (result == NULL) {
             warn("Failed to convert doc to string");
@@ -212,34 +282,40 @@ _hash2xml2fh(fh, hash, rootNodeName, version, encoding, indent)
         char *encoding;
         I32   indent;
     INIT:
-        xmlOutputBufferPtr        buffer;
-        xmlCharEncodingHandlerPtr handler = NULL;
-        xmlDocPtr                 doc     = NULL;
-        xmlNodePtr                node    = NULL;
+        xmlOutputBufferPtr         out_buff  = NULL;
+        xmlCharEncodingHandlerPtr  conv_hdlr = NULL;
     CODE:
-        doc = xmlNewDoc((const xmlChar*) version);
-        doc->encoding = strdup(encoding);
+        recursion_depth = 0;
+        indent_count    = 0;
 
-        node = xmlNewNode( NULL, (const xmlChar *)strdup(rootNodeName) );
-        xmlDocSetRootElement(doc, node);
-
-        XMLHash_hash2xml(node, hash);
+        conv_hdlr = xmlFindCharEncodingHandler(encoding);
+        if ( conv_hdlr == NULL ) {
+            croak("Unknown encoding");
+        }
 
         xmlRegisterDefaultOutputCallbacks();
 
-        if ( xmlParseCharEncoding((const char*) doc->encoding) != XML_CHAR_ENCODING_UTF8) {
-            handler = xmlFindCharEncodingHandler((const char*)encoding);
-        }
-
-        buffer = xmlOutputBufferCreateIO(
+        out_buff = xmlOutputBufferCreateIO(
             (xmlOutputWriteCallback) &XMLHash_output_write_handler,
             (xmlOutputCloseCallback) &XMLHash_output_close_handler,
             fh,
-            handler
+            conv_hdlr
         );
 
-        RETVAL = xmlSaveFormatFileTo(buffer, doc, (const char *) doc->encoding, 0);
+        if (out_buff == NULL ) {
+            croak("Creating buffer");
+        }
 
-        xmlFreeDoc(doc);
+        xmlOutputBufferWrite(out_buff, 14, "<?xml version=");
+        xmlBufferWriteQuotedString(out_buff->buffer, (xmlChar *) version);
+        xmlOutputBufferWrite(out_buff, 10, " encoding=");
+        xmlBufferWriteQuotedString(out_buff->buffer, (xmlChar *) encoding);
+        xmlOutputBufferWrite(out_buff, 3, "?>\n");
+
+        XMLHash_hash2xml_write_tag(out_buff, TAG_OPEN, rootNodeName, indent, indent);
+        XMLHash_hash2xml(out_buff, hash, indent);
+        XMLHash_hash2xml_write_tag(out_buff, TAG_CLOSE, rootNodeName, indent, 1);
+
+        RETVAL = xmlOutputBufferClose(out_buff);
     OUTPUT:
         RETVAL
