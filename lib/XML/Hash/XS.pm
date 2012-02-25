@@ -8,7 +8,7 @@ use Scalar::Util qw(openhandle);
 use base 'Exporter';
 our @EXPORT_OK = our @EXPORT = qw( hash2xml );
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 require XSLoader;
 XSLoader::load('XML::Hash::XS', $VERSION);
@@ -34,15 +34,6 @@ sub hash2xml {
     }
 }
 
-sub __write {
-    if ( ref( $_[0] ) ) {
-        $_[0]->write( $_[1], $_[2] );
-    }
-    else {
-        $_[0]->write( $_[1] );
-    }
-}
-
 1;
 __END__
 =head1 NAME
@@ -65,6 +56,35 @@ This module implements simple hash to XML converter written in C using libxml2 l
 =head2 hash2xml $hash, [ %options ]
 
 $hash is reference to hash
+
+    hash2xml
+        {
+            node1 => 'value1',
+            node2 => [ 'value21', { node22 => 'value22' } ],
+            node3 => \'value3',
+            node4 => sub { return 'value4' },
+            node5 => sub { return { node51 => 'value51' } },
+        },
+        indent => 1
+    ;
+
+will convert to:
+
+    <?xml version="1.0" encoding="utf-8"?>
+    <root>
+      <node1>value1</node1>
+      <node2>
+        <item>value21</item>
+        <item>
+          <node22>value22</node22>
+        </item>
+      </node2>
+      <node3>value3</node3>
+      <node4>value4</node4>
+      <node5>
+        <node51>value51</node51>
+      </node5>
+    </root>
 
 =head1 OPTIONS
 

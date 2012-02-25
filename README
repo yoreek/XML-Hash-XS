@@ -15,6 +15,35 @@ FUNCTIONS
   hash2xml $hash, [ %options ]
     $hash is reference to hash
 
+        hash2xml
+            {
+                node1 => 'value1',
+                node2 => [ 'value21', { node22 => 'value22' } ],
+                node3 => \'value3',
+                node4 => sub { return 'value4' },
+                node5 => sub { return { node51 => 'value51' } },
+            },
+            indent => 1
+        ;
+
+    will convert to:
+
+        <?xml version="1.0" encoding="utf-8"?>
+        <root>
+          <node1>value1</node1>
+          <node2>
+            <item>value21</item>
+            <item>
+              <node22>value22</node22>
+            </item>
+          </node2>
+          <node3>value3</node3>
+          <node4>value4</node4>
+          <node5>
+            <node51>value51</node51>
+          </node5>
+        </root>
+
 OPTIONS
     root [ = 'root' ]
         Root node name.

@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 12;
+use Test::More tests => 13;
 use File::Temp qw(tempfile);
 
 use XML::Hash::XS 'hash2xml';
@@ -121,4 +121,38 @@ EOT
         qq{$xml\n<root><node1>value1</node1></root>\n},
         'filehandle output',
     ;
+}
+
+{
+    my $data = '';
+    tie *STDOUT, "Trapper", \$data;
+    hash2xml( { node1 => 'value1' }, output => \*STDOUT );
+    untie *STDOUT;
+    is
+        $data,
+        qq{$xml\n<root><node1>value1</node1></root>\n},
+        'tied filehandle output',
+    ;
+}
+
+package Trapper;
+
+sub TIEHANDLE {
+    my ($class, $str) = @_;
+    return bless [$str], $class;
+}
+
+sub WRITE {
+    my ($self, $buf, $len, $offset) = @_;
+
+    $len    ||= length($buf);
+    $offset ||= 0;
+
+    ${$self->[0]} .= substr($buf, $offset, $len);
+
+    return $len;
+}
+
+sub PRINT {
+    ${shift->[0]} .= join('', @_);
 }
