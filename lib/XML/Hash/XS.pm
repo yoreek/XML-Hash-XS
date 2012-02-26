@@ -26,7 +26,7 @@ sub hash2xml {
     if ( $output eq 'string' ) {
         _hash2xml2string( $hash, @options{qw( root version encoding indent )} );
     }
-    elsif ( my $fh = $output ) {
+    elsif ( my $fh = openhandle($output) ) {
         _hash2xml2fh( $fh, $hash, @options{qw( root version encoding indent )} );
     }
     else {

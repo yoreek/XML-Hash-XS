@@ -297,6 +297,7 @@ _hash2xml2fh(fh, hash, rootNodeName, version, encoding, indent)
         char *version;
         char *encoding;
         I32   indent;
+    PROTOTYPE: *;$$$$$
     INIT:
         xmlOutputBufferPtr         out_buff  = NULL;
         xmlCharEncodingHandlerPtr  conv_hdlr = NULL;
