@@ -1,5 +1,8 @@
 Revision history for XML::Hash::XS.
 
+0.03_01 2012-02-28
+        Added META.json
+
 0.03    2012-02-25
         Changed output to a file handle (thanks to Cono)
 
