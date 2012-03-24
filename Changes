@@ -1,5 +1,8 @@
 Revision history for XML::Hash::XS.
 
+0.04    2012-03-24
+        Updated Makefile.PL
+
 0.03_01 2012-02-28
         Added META.json
 
