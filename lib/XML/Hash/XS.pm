@@ -8,7 +8,7 @@ use Scalar::Util qw(openhandle);
 use base 'Exporter';
 our @EXPORT_OK = our @EXPORT = qw( hash2xml );
 
-our $VERSION = '0.04';
+our $VERSION = '0.05';
 
 require XSLoader;
 XSLoader::load('XML::Hash::XS', $VERSION);

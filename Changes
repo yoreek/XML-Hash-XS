@@ -1,5 +1,8 @@
 Revision history for XML::Hash::XS.
 
+0.05    2012-03-25
+        Fix bug with compiling on FreeBSD
+
 0.04    2012-03-24
         Updated Makefile.PL
 

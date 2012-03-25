@@ -45,7 +45,7 @@ XMLHash_output_write_tied_handler(void *obj, char *buffer, int len)
         PUSHs(sv_2mortal(newSVpv(buffer, len)));
         PUTBACK;
 
-        call_method("PRINT", G_SCALAR | G_WANT);
+        call_method("PRINT", G_SCALAR);
 
         FREETMPS;
         LEAVE;
@@ -232,6 +232,8 @@ XMLHash_hash2xml_process(xmlOutputBufferPtr out_buff, SV *hash,
 
 MODULE = XML::Hash::XS PACKAGE = XML::Hash::XS
 
+PROTOTYPES: DISABLE
+
 SV *
 _hash2xml2string(hash, rootNodeName, version, encoding, indent)
         SV   *hash;
@@ -297,7 +299,6 @@ _hash2xml2fh(fh, hash, rootNodeName, version, encoding, indent)
         char *version;
         char *encoding;
         I32   indent;
-    PROTOTYPE: *;$$$$$
     INIT:
         xmlOutputBufferPtr         out_buff  = NULL;
         xmlCharEncodingHandlerPtr  conv_hdlr = NULL;
