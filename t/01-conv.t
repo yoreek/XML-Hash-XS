@@ -126,7 +126,7 @@ EOT
 {
     my $data = '';
     tie *STDOUT, "Trapper", \$data;
-    hash2xml( { node1 => 'value1' }, output => *STDOUT );
+    hash2xml( { node1 => 'value1' }, output => \*STDOUT );
     untie *STDOUT;
     is
         $data,
