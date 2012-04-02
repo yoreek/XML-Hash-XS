@@ -1,5 +1,9 @@
 Revision history for XML::Hash::XS.
 
+0.05_02 2012-04-03
+        Added ppport.h.
+        No more using Scalar::Util.
+
 0.05_01 2012-03-26
         Fix test conv.t
 

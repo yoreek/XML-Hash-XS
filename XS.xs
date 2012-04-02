@@ -1,8 +1,21 @@
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
+#include "ppport.h"
 
 #include <libxml/parser.h>
+
+#ifndef MUTABLE_PTR
+#if defined(__GNUC__) && !defined(PERL_GCC_BRACE_GROUPS_FORBIDDEN)
+#  define MUTABLE_PTR(p) ({ void *_p = (p); _p; })
+#else
+#  define MUTABLE_PTR(p) ((void *) (p))
+#endif
+#endif
+
+#ifndef MUTABLE_SV
+#define MUTABLE_SV(p)	((SV *)MUTABLE_PTR(p))
+#endif
 
 #define MAX_RECURSION_DEPTH 128
 #define ARRAY_ITEM_TAG      "item"

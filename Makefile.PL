@@ -35,7 +35,6 @@ my %INFO = (
     AUTHOR        => 'Yuriy Ustushenko <yoreek@yahoo.com>',
     LICENSE       => "perl",
     PREREQ_PM     => {
-        'Scalar::Util' => 0,
         'Test::More'   => 0,
     },
 );

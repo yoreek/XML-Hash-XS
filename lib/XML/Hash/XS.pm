@@ -4,11 +4,10 @@ use 5.008008;
 use strict;
 use warnings;
 
-use Scalar::Util qw(openhandle);
 use base 'Exporter';
 our @EXPORT_OK = our @EXPORT = qw( hash2xml );
 
-our $VERSION = '0.05_01';
+our $VERSION = '0.05_02';
 
 require XSLoader;
 XSLoader::load('XML::Hash::XS', $VERSION);
@@ -26,11 +25,11 @@ sub hash2xml {
     if ( $output eq 'string' ) {
         _hash2xml2string( $hash, @options{qw( root version encoding indent )} );
     }
-    elsif ( my $fh = openhandle($output) ) {
-        _hash2xml2fh( $fh, $hash, @options{qw( root version encoding indent )} );
+    elsif ( ref($output) ) {
+        _hash2xml2fh( $output, $hash, @options{qw( root version encoding indent )} );
     }
     else {
-        die "Invalid output type: '".ref($output)."'";
+        die "Invalid output type";
     }
 }
 
