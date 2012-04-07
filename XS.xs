@@ -1,5 +1,6 @@
 #include "EXTERN.h"
 #include "perl.h"
+#define NO_XSLOCKS
 #include "XSUB.h"
 #include "ppport.h"
 
@@ -16,6 +17,17 @@
 #ifndef MUTABLE_SV
 #define MUTABLE_SV(p)   ((SV *)MUTABLE_PTR(p))
 #endif
+
+#if __GNUC__ >= 3
+# define expect(expr,value)         __builtin_expect ((expr), (value))
+# define INLINE                     static inline
+#else
+# define expect(expr,value)         (expr)
+# define INLINE                     static
+#endif
+
+#define expect_false(expr) expect ((expr) != 0, 0)
+#define expect_true(expr)  expect ((expr) != 0, 1)
 
 #define FLAG_SIMPLE                     1
 #define FLAG_COMPLEX                    2
@@ -42,6 +54,12 @@ typedef struct {
     void *value;
 } hash_entity_t;
 
+typedef struct _stash_entity_t stash_entity_t;
+struct _stash_entity_t {
+    void                   *data;
+    struct _stash_entity_t *next;
+};
+
 typedef struct {
     char              *version;
     char              *encoding;
@@ -52,6 +70,7 @@ typedef struct {
     int                canonical;
     int                use_attr;
     xmlOutputBufferPtr buf;
+    stash_entity_t     stash;
 } convert_ctx_t;
 
 const char indent_string[60] = "                                                            ";
@@ -213,16 +232,31 @@ XMLHash_write_attribute_element(convert_ctx_t *ctx, char *name, xmlChar *value)
     BUFFER_WRITE_CONSTANT("\"");
 }
 
-#if __GNUC__ >= 3
-# define expect(expr,value)         __builtin_expect ((expr), (value))
-# define INLINE                     static inline
-#else
-# define expect(expr,value)         (expr)
-# define INLINE                     static
-#endif
+void
+XMLHash_stash_push(stash_entity_t *stash, void *data)
+{
+    stash_entity_t *ent;
+    ent = malloc(sizeof(stash_entity_t));
+    if (ent == NULL)
+        croak("Malloc error");
 
-#define expect_false(expr) expect ((expr) != 0, 0)
-#define expect_true(expr)  expect ((expr) != 0, 1)
+    ent->data   = data;
+    ent->next   = stash->next;
+    stash->next = ent;
+}
+
+void
+XMLHash_stash_clean(stash_entity_t *stash)
+{
+    stash_entity_t *ent;
+
+    while (stash->next != NULL) {
+        ent = stash->next;
+        SvREFCNT_dec((SV *)ent->data);
+        stash->next = ent->next;
+        free(ent);
+    }
+}
 
 void
 XMLHash_resolve_value(convert_ctx_t *ctx, SV **value, SV **value_ref, int *raw)
@@ -264,6 +298,8 @@ XMLHash_resolve_value(convert_ctx_t *ctx, SV **value, SV **value_ref, int *raw)
 
                 SvREFCNT_inc(*value);
 
+                XMLHash_stash_push(&ctx->stash, *value);
+
                 FREETMPS; LEAVE;
 
                 *raw = 1;
@@ -287,6 +323,8 @@ XMLHash_resolve_value(convert_ctx_t *ctx, SV **value, SV **value_ref, int *raw)
                 *value = POPs;
 
                 SvREFCNT_inc(*value);
+
+                XMLHash_stash_push(&ctx->stash, *value);
 
                 PUTBACK;
 
@@ -612,12 +650,25 @@ XMLHash_hash2xml(convert_ctx_t *ctx, SV *hash)
     BUFFER_WRITE_QUOTED(ctx->encoding);
     BUFFER_WRITE_CONSTANT("?>\n");
 
-    if (ctx->use_attr) {
-        XMLHash_write_hash(ctx, ctx->root, hash);
+    dXCPT;
+
+    XCPT_TRY_START {
+        if (ctx->use_attr) {
+            XMLHash_write_hash(ctx, ctx->root, hash);
+        }
+        else {
+            XMLHash_write_hash_no_attr(ctx, ctx->root, hash);
+        }
+        XMLHash_stash_clean(&ctx->stash);
+    } XCPT_TRY_END
+
+    XCPT_CATCH
+    {
+        XMLHash_stash_clean(&ctx->stash);
+        xmlOutputBufferClose(ctx->buf);
+        XCPT_RETHROW;
     }
-    else {
-        XMLHash_write_hash_no_attr(ctx, ctx->root, hash);
-    }
+
 }
 
 MODULE = XML::Hash::XS PACKAGE = XML::Hash::XS
@@ -641,12 +692,12 @@ _hash2xml2string(hash, root, version, encoding, indent, canonical, use_attr)
     CODE:
         RETVAL = &PL_sv_undef;
 
+        memset(&ctx, 0, sizeof(convert_ctx_t));
+
         ctx.root            = root;
         ctx.version         = version;
         ctx.encoding        = encoding;
-        ctx.recursion_depth = 0;
         ctx.indent          = indent;
-        ctx.indent_count    = 0;
         ctx.canonical       = canonical;
         ctx.use_attr        = use_attr;
 
@@ -708,12 +759,12 @@ _hash2xml2fh(fh, hash, root, version, encoding, indent, canonical, use_attr)
         IO                        *io = GvIO(gv);
         convert_ctx_t              ctx;
     CODE:
+        memset(&ctx, 0, sizeof(convert_ctx_t));
+
         ctx.root            = root;
         ctx.version         = version;
         ctx.encoding        = encoding;
-        ctx.recursion_depth = 0;
         ctx.indent          = indent;
-        ctx.indent_count    = 0;
         ctx.canonical       = canonical;
         ctx.use_attr        = use_attr;
 
