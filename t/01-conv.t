@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 15;
+use Test::More tests => 16;
 use File::Temp qw(tempfile);
 
 use XML::Hash::XS 'hash2xml';
@@ -171,6 +171,27 @@ $xml
 EOT
         'use attributes',
     ;
+}
+
+{
+    my $o = TestObject->new();
+    is
+        $data = hash2xml(
+            { object => $o },
+        ),
+        qq{$xml\n<root><object><root attr="1">value1</root></object></root>},
+        'object',
+    ;
+}
+
+package TestObject;
+
+sub new {
+    return bless [], shift;
+}
+
+sub toString {
+    return '<root attr="1">value1</root>';
 }
 
 package Trapper;

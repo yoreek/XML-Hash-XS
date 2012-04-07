@@ -213,10 +213,25 @@ XMLHash_write_attribute_element(convert_ctx_t *ctx, char *name, xmlChar *value)
     BUFFER_WRITE_CONSTANT("\"");
 }
 
+#if __GNUC__ >= 3
+# define expect(expr,value)         __builtin_expect ((expr), (value))
+# define INLINE                     static inline
+#else
+# define expect(expr,value)         (expr)
+# define INLINE                     static
+#endif
+
+#define expect_false(expr) expect ((expr) != 0, 0)
+#define expect_true(expr)  expect ((expr) != 0, 1)
+
 void
-XMLHash_resolve_value(convert_ctx_t *ctx, SV **value, SV **value_ref)
+XMLHash_resolve_value(convert_ctx_t *ctx, SV **value, SV **value_ref, int *raw)
 {
     int count;
+    svtype svt;
+    SV *sv;
+
+    *raw = 0;
 
     while ( *value && SvROK(*value) ) {
         if (++ctx->recursion_depth > MAX_RECURSION_DEPTH)
@@ -224,9 +239,42 @@ XMLHash_resolve_value(convert_ctx_t *ctx, SV **value, SV **value_ref)
 
         *value_ref = *value;
         *value     = SvRV(*value);
+        sv         = *value;
 
-        if(SvTYPE(*value) == SVt_PVCV) {
+        if (expect_false( SvOBJECT(sv) )) {
+            /* object */
+            GV *to_string = gv_fetchmethod_autoload (SvSTASH (sv), "toString", 0);
+            if (to_string) {
+                dSP;
+
+                ENTER; SAVETMPS; PUSHMARK (SP);
+                XPUSHs (sv_bless (sv_2mortal (newRV_inc (sv)), SvSTASH (sv)));
+
+                // calling with G_SCALAR ensures that we always get a 1 return value
+                PUTBACK;
+                call_sv ((SV *)GvCV (to_string), G_SCALAR);
+                SPAGAIN;
+
+                // catch this surprisingly common error
+                if (SvROK (TOPs) && SvRV (TOPs) == sv)
+                    croak("%s::toString method returned same object as was passed instead of a new one", HvNAME (SvSTASH (sv)));
+
+                *value = POPs;
+                PUTBACK;
+
+                SvREFCNT_inc(*value);
+
+                FREETMPS; LEAVE;
+
+                *raw = 1;
+
+                continue;
+            }
+        }
+        else if(SvTYPE(*value) == SVt_PVCV) {
             /* code ref */
+            *raw = 0;
+
             dSP;
 
             ENTER;
@@ -253,8 +301,6 @@ XMLHash_resolve_value(convert_ctx_t *ctx, SV **value, SV **value_ref)
         }
     }
 }
-
-
 
 void
 XMLHash_write_hash_no_attr(convert_ctx_t *ctx, char *name, SV *hash)
@@ -318,10 +364,10 @@ void
 XMLHash_write_item_no_attr(convert_ctx_t *ctx, char *name, SV *value)
 {
     I32        i, len;
-    int        count;
+    int        count, raw;
     SV        *value_ref;
 
-    XMLHash_resolve_value(ctx, &value, &value_ref);
+    XMLHash_resolve_value(ctx, &value, &value_ref, &raw);
 
     switch (SvTYPE(value)) {
         case SVt_NULL:
@@ -334,7 +380,12 @@ XMLHash_write_item_no_attr(convert_ctx_t *ctx, char *name, SV *value)
         case SVt_PV:
             /* integer, double, scalar */
             XMLHash_write_tag(ctx, TAG_OPEN, name, ctx->indent, 0);
-            BUFFER_WRITE_ESCAPE(SvPV_nolen(value));
+            if (raw) {
+                BUFFER_WRITE_STRING(SvPV_nolen(value));
+            }
+            else {
+                BUFFER_WRITE_ESCAPE(SvPV_nolen(value));
+            }
             XMLHash_write_tag(ctx, TAG_CLOSE, name, 0, ctx->indent);
             break;
         case SVt_PVAV:
@@ -352,7 +403,12 @@ XMLHash_write_item_no_attr(convert_ctx_t *ctx, char *name, SV *value)
             /* blessed */
             if (SvOK(value)) {
                 XMLHash_write_tag(ctx, TAG_OPEN, name, ctx->indent, 0);
-                BUFFER_WRITE_ESCAPE(SvPV_nolen(value));
+                if (raw) {
+                    BUFFER_WRITE_STRING(SvPV_nolen(value));
+                }
+                else {
+                    BUFFER_WRITE_ESCAPE(SvPV_nolen(value));
+                }
                 XMLHash_write_tag(ctx, TAG_CLOSE, name, 0, ctx->indent);
                 break;
             }
@@ -363,17 +419,14 @@ XMLHash_write_item_no_attr(convert_ctx_t *ctx, char *name, SV *value)
     ctx->recursion_depth--;
 }
 
-
-
-
 int
 XMLHash_write_item(convert_ctx_t *ctx, char *name, SV *value, int flag)
 {
-    int        count = 0;
+    int        count = 0, raw;
     I32        len, i;
     SV        *value_ref;
 
-    XMLHash_resolve_value(ctx, &value, &value_ref);
+    XMLHash_resolve_value(ctx, &value, &value_ref, &raw);
 
     switch (SvTYPE(value)) {
         case SVt_NULL:
@@ -442,8 +495,6 @@ XMLHash_write_item(convert_ctx_t *ctx, char *name, SV *value, int flag)
 
     return count;
 }
-
-
 
 void
 XMLHash_write_hash(convert_ctx_t *ctx, char *name, SV *hash)
@@ -550,7 +601,6 @@ XMLHash_write_hash(convert_ctx_t *ctx, char *name, SV *hash)
         }
     }
 }
-
 
 void
 XMLHash_hash2xml(convert_ctx_t *ctx, SV *hash)
