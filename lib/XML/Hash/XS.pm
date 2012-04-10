@@ -7,7 +7,7 @@ use warnings;
 use base 'Exporter';
 our @EXPORT_OK = our @EXPORT = qw( hash2xml );
 
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 
 require XSLoader;
 XSLoader::load('XML::Hash::XS', $VERSION);
@@ -18,7 +18,7 @@ sub hash2xml {
     $options{root}     ||= 'root';
     $options{version}  ||= '1.0';
     $options{encoding} ||= 'utf-8';
-    $options{indent}   //= 0;
+    $options{indent}   ||= 0;
     $options{canonical}  = $options{canonical} ? 1 : 0;
     $options{use_attr}   = $options{use_attr}  ? 1 : 0;
 

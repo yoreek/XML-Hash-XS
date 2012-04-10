@@ -774,7 +774,7 @@ _hash2xml2fh(fh, hash, root, version, encoding, indent, canonical, use_attr)
 
         xmlRegisterDefaultOutputCallbacks();
 
-        if (io && (mg = SvTIED_mg((const SV *)io, PERL_MAGIC_tiedscalar))) {
+        if (io && (mg = SvTIED_mg((SV *)io, PERL_MAGIC_tiedscalar))) {
             /* tied handle */
             obj = SvTIED_obj(MUTABLE_SV(io), mg);
 
