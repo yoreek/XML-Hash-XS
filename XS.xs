@@ -31,6 +31,7 @@
 
 #define FLAG_SIMPLE                     1
 #define FLAG_COMPLEX                    2
+#define FLAG_CONTENT                    4
 
 #define MAX_RECURSION_DEPTH             128
 
@@ -69,6 +70,7 @@ typedef struct {
     int                indent_count;
     int                canonical;
     int                use_attr;
+    char              *content;
     xmlOutputBufferPtr buf;
     stash_entity_t     stash;
 } convert_ctx_t;
@@ -158,6 +160,25 @@ XMLHash_write_tag(convert_ctx_t *ctx, tagType type, char *name, int indent, int 
     else if (type == TAG_CLOSE || type == TAG_OPEN) {
         BUFFER_WRITE_CONSTANT(">");
     }
+
+    if (lf)
+        BUFFER_WRITE_CONSTANT("\n");
+}
+
+void
+XMLHash_write_content(convert_ctx_t *ctx, char *value, int indent, int lf)
+{
+    int indent_len;
+
+    if (indent) {
+        indent_len = ctx->indent_count * indent;
+        if (indent_len > sizeof(indent_string))
+            indent_len = sizeof(indent_string);
+
+        BUFFER_WRITE(indent_string, indent_len);
+    }
+
+    BUFFER_WRITE_ESCAPE(value);
 
     if (lf)
         BUFFER_WRITE_CONSTANT("\n");
@@ -460,9 +481,13 @@ XMLHash_write_item_no_attr(convert_ctx_t *ctx, char *name, SV *value)
 int
 XMLHash_write_item(convert_ctx_t *ctx, char *name, SV *value, int flag)
 {
-    int        count = 0, raw;
+    int        count = 0, raw = 0;
     I32        len, i;
     SV        *value_ref;
+
+    if (ctx->content != NULL && strcmp(name, ctx->content) == 0) {
+        flag = flag | FLAG_CONTENT;
+    }
 
     XMLHash_resolve_value(ctx, &value, &value_ref, &raw);
 
@@ -471,7 +496,7 @@ XMLHash_write_item(convert_ctx_t *ctx, char *name, SV *value, int flag)
             if (flag & FLAG_SIMPLE && flag & FLAG_COMPLEX) {
                 XMLHash_write_tag(ctx, TAG_EMPTY, name, ctx->indent, ctx->indent);
             }
-            else if (flag & FLAG_SIMPLE) {
+            else if (flag & FLAG_SIMPLE && !(flag & FLAG_CONTENT)) {
                 XMLHash_write_attribute_element(ctx, name, NULL);
                 count++;
             }
@@ -489,7 +514,12 @@ XMLHash_write_item(convert_ctx_t *ctx, char *name, SV *value, int flag)
                 XMLHash_write_tag(ctx, TAG_CLOSE, name, 0, ctx->indent);
                 ctx->indent_count--;
             }
-            else if (flag & FLAG_SIMPLE) {
+            else if (flag & FLAG_COMPLEX && flag & FLAG_CONTENT) {
+                ctx->indent_count++;
+                XMLHash_write_content(ctx, SvPV_nolen(value), ctx->indent, ctx->indent);
+                ctx->indent_count--;
+            }
+            else if (flag & FLAG_SIMPLE && !(flag & FLAG_CONTENT)) {
                 XMLHash_write_attribute_element(ctx, name, (xmlChar *) SvPV_nolen(value));
                 count++;
             }
@@ -516,14 +546,26 @@ XMLHash_write_item(convert_ctx_t *ctx, char *name, SV *value, int flag)
         case SVt_PVMG:
             /* blessed */
             if (SvOK(value)) {
-                if (flag & FLAG_SIMPLE) {
+                if (flag & FLAG_SIMPLE && flag & FLAG_COMPLEX) {
+                    ctx->indent_count++;
+                    XMLHash_write_tag(ctx, TAG_OPEN, name, ctx->indent, 0);
+                    BUFFER_WRITE_ESCAPE(SvPV_nolen(value));
+                    XMLHash_write_tag(ctx, TAG_CLOSE, name, 0, ctx->indent);
+                    ctx->indent_count--;
+                }
+                else if (flag & FLAG_COMPLEX && flag & FLAG_CONTENT) {
+                    ctx->indent_count++;
+                    XMLHash_write_content(ctx, SvPV_nolen(value), ctx->indent, ctx->indent);
+                    ctx->indent_count--;
+                }
+                else if (flag & FLAG_SIMPLE && !(flag & FLAG_CONTENT)) {
                     XMLHash_write_attribute_element(ctx, name, (xmlChar *) SvPV_nolen(value));
                     count++;
                 }
                 break;
             }
         default:
-            if (flag & FLAG_SIMPLE) {
+            if (flag & FLAG_SIMPLE && !(flag & FLAG_CONTENT)) {
                 XMLHash_write_attribute_element(ctx, name, NULL);
                 count++;
             }
@@ -676,7 +718,7 @@ MODULE = XML::Hash::XS PACKAGE = XML::Hash::XS
 PROTOTYPES: DISABLE
 
 SV *
-_hash2xml2string(hash, root, version, encoding, indent, canonical, use_attr)
+_hash2xml2string(hash, root, version, encoding, indent, canonical, use_attr, content)
         SV   *hash;
         char *root;
         char *version;
@@ -684,6 +726,7 @@ _hash2xml2string(hash, root, version, encoding, indent, canonical, use_attr)
         I32   indent;
         I32   canonical;
         I32   use_attr;
+        SV   *content;
     INIT:
         xmlChar                   *result    = NULL;
         int                        len       = 0;
@@ -700,6 +743,9 @@ _hash2xml2string(hash, root, version, encoding, indent, canonical, use_attr)
         ctx.indent          = indent;
         ctx.canonical       = canonical;
         ctx.use_attr        = use_attr;
+
+        if ( SvOK(content) )
+            ctx.content = SvPV_nolen(content);
 
         conv_hdlr = xmlFindCharEncodingHandler(encoding);
         if ( conv_hdlr == NULL )
@@ -740,7 +786,7 @@ _hash2xml2string(hash, root, version, encoding, indent, canonical, use_attr)
         RETVAL
 
 int
-_hash2xml2fh(fh, hash, root, version, encoding, indent, canonical, use_attr)
+_hash2xml2fh(fh, hash, root, version, encoding, indent, canonical, use_attr, content)
         void *fh;
         SV   *hash;
         char *root;
@@ -749,6 +795,7 @@ _hash2xml2fh(fh, hash, root, version, encoding, indent, canonical, use_attr)
         I32   indent;
         I32   canonical;
         I32   use_attr;
+        SV   *content;
     INIT:
         xmlOutputBufferPtr         buf  = NULL;
         xmlCharEncodingHandlerPtr  conv_hdlr = NULL;
@@ -767,6 +814,9 @@ _hash2xml2fh(fh, hash, root, version, encoding, indent, canonical, use_attr)
         ctx.indent          = indent;
         ctx.canonical       = canonical;
         ctx.use_attr        = use_attr;
+
+        if ( SvOK(content) )
+            ctx.content = SvPV_nolen(content);
 
         conv_hdlr = xmlFindCharEncodingHandler(encoding);
         if ( conv_hdlr == NULL )

@@ -2,33 +2,51 @@ package XML::Hash::XS;
 
 use 5.008008;
 use strict;
+no strict 'refs';
 use warnings;
 
 use base 'Exporter';
 our @EXPORT_OK = our @EXPORT = qw( hash2xml );
 
-our $VERSION = '0.08';
+our $VERSION = '0.09';
 
 require XSLoader;
 XSLoader::load('XML::Hash::XS', $VERSION);
 
+our $root      = 'root';
+our $version   = '1.0';
+our $encoding  = 'utf-8';
+our $indent    = 0;
+our $canonical = 0;
+our $use_attr  = 0;
+our $content   = undef;
+
+my @OPTIONS_LIST = qw/
+    root
+    version
+    encoding
+    indent
+    canonical
+    use_attr
+    content
+/;
+
 sub hash2xml {
-	my ($hash, %options) = @_;
+	my ($hash, @options) = @_;
 
-    $options{root}     ||= 'root';
-    $options{version}  ||= '1.0';
-    $options{encoding} ||= 'utf-8';
-    $options{indent}   ||= 0;
-    $options{canonical}  = $options{canonical} ? 1 : 0;
-    $options{use_attr}   = $options{use_attr}  ? 1 : 0;
+    my %options = (
+        (map {$_ => ${$_}} @OPTIONS_LIST),
+        output => 'string',
+        @options,
+    );
 
-    my $output = $options{output} || 'string';
+    my $output = $options{output};
 
     if ( $output eq 'string' ) {
-        _hash2xml2string( $hash, @options{qw( root version encoding indent canonical use_attr)} );
+        _hash2xml2string( $hash, @options{@OPTIONS_LIST} );
     }
     elsif ( ref($output) ) {
-        _hash2xml2fh( $output, $hash, @options{qw( root version encoding indent canonical use_attr)} );
+        _hash2xml2fh( $output, $hash, @options{@OPTIONS_LIST} );
     }
     else {
         die "Invalid output type";
@@ -153,6 +171,10 @@ if canonical is "0", order of the element will be pseudo-randomly.
 if use_attr is "1", converter will be use the attributes.
 
 if use_attr is "0", converter will be use tags only.
+
+=item content [ = undef ]
+
+if defined that the key name for the text content(used only if use_attr=1).
 
 =back
 

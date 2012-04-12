@@ -1,5 +1,8 @@
 Revision history for XML::Hash::XS.
 
+0.09    2012-04-12
+        New option "content".
+
 0.08    2012-04-10
         Fix for perl < 5.10.
 

@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 16;
+use Test::More tests => 18;
 use File::Temp qw(tempfile);
 
 use XML::Hash::XS 'hash2xml';
@@ -174,6 +174,32 @@ EOT
 }
 
 {
+    is
+        $data = hash2xml(
+            {
+                content => 'content&1',
+                node2   => [ 21, { node22 => 'value23', 'content' => 'content2' } ],
+            },
+            use_attr  => 1,
+            canonical => 1,
+            indent    => 2,
+            content   => 'content',
+        ),
+        <<"EOT",
+$xml
+<root>
+  content&amp;1
+  <node2>21</node2>
+  <node2 node22="value23">
+    content2
+  </node2>
+</root>
+EOT
+        'content',
+    ;
+}
+
+{
     my $o = TestObject->new();
     is
         $data = hash2xml(
@@ -181,6 +207,32 @@ EOT
         ),
         qq{$xml\n<root><object><root attr="1">value1</root></object></root>},
         'object',
+    ;
+}
+
+{
+    $XML::Hash::XS::indent    = 2;
+    $XML::Hash::XS::use_attr  = 1;
+    $XML::Hash::XS::canonical = 1;
+    $XML::Hash::XS::content   = 'content';
+    is
+        $data = hash2xml(
+            {
+                content => 'content&1',
+                node2   => [ 21, { node22 => 'value23', 'content' => 'content2' } ],
+            },
+        ),
+        <<"EOT",
+$xml
+<root>
+  content&amp;1
+  <node2>21</node2>
+  <node2 node22="value23">
+    content2
+  </node2>
+</root>
+EOT
+        'global options',
     ;
 }
 
