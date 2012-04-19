@@ -1,5 +1,8 @@
 Revision history for XML::Hash::XS.
 
+0.10    2012-04-19
+        New option "xml_decl".
+
 0.09    2012-04-12
         New option "content".
 

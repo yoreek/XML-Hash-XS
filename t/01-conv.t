@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 18;
+use Test::More tests => 19;
 use File::Temp qw(tempfile);
 
 use XML::Hash::XS 'hash2xml';
@@ -233,6 +233,25 @@ $xml
 </root>
 EOT
         'global options',
+    ;
+}
+
+{
+    $XML::Hash::XS::indent    = 2;
+    $XML::Hash::XS::use_attr  = 1;
+    $XML::Hash::XS::canonical = 1;
+    $XML::Hash::XS::content   = 'content';
+    $XML::Hash::XS::xml_decl  = 0;
+    is
+        $data = hash2xml(
+            {
+                node1 => 'value1',
+            },
+        ),
+        <<"EOT",
+<root node1="value1"/>
+EOT
+        'xml declaration',
     ;
 }
 

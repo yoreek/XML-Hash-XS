@@ -71,6 +71,7 @@ typedef struct {
     int                canonical;
     int                use_attr;
     char              *content;
+    int                xml_decl;
     xmlOutputBufferPtr buf;
     stash_entity_t     stash;
 } convert_ctx_t;
@@ -685,12 +686,14 @@ XMLHash_write_hash(convert_ctx_t *ctx, char *name, SV *hash)
 void
 XMLHash_hash2xml(convert_ctx_t *ctx, SV *hash)
 {
-    /* xml declaration */
-    BUFFER_WRITE_CONSTANT("<?xml version=");
-    BUFFER_WRITE_QUOTED(ctx->version);
-    BUFFER_WRITE_CONSTANT(" encoding=");
-    BUFFER_WRITE_QUOTED(ctx->encoding);
-    BUFFER_WRITE_CONSTANT("?>\n");
+    if (ctx->xml_decl) {
+        /* xml declaration */
+        BUFFER_WRITE_CONSTANT("<?xml version=");
+        BUFFER_WRITE_QUOTED(ctx->version);
+        BUFFER_WRITE_CONSTANT(" encoding=");
+        BUFFER_WRITE_QUOTED(ctx->encoding);
+        BUFFER_WRITE_CONSTANT("?>\n");
+    }
 
     dXCPT;
 
@@ -718,7 +721,7 @@ MODULE = XML::Hash::XS PACKAGE = XML::Hash::XS
 PROTOTYPES: DISABLE
 
 SV *
-_hash2xml2string(hash, root, version, encoding, indent, canonical, use_attr, content)
+_hash2xml2string(hash, root, version, encoding, indent, canonical, use_attr, content, xml_decl)
         SV   *hash;
         char *root;
         char *version;
@@ -727,6 +730,7 @@ _hash2xml2string(hash, root, version, encoding, indent, canonical, use_attr, con
         I32   canonical;
         I32   use_attr;
         SV   *content;
+        I32   xml_decl;
     INIT:
         xmlChar                   *result    = NULL;
         int                        len       = 0;
@@ -743,6 +747,7 @@ _hash2xml2string(hash, root, version, encoding, indent, canonical, use_attr, con
         ctx.indent          = indent;
         ctx.canonical       = canonical;
         ctx.use_attr        = use_attr;
+        ctx.xml_decl        = xml_decl;
 
         if ( SvOK(content) )
             ctx.content = SvPV_nolen(content);
@@ -786,7 +791,7 @@ _hash2xml2string(hash, root, version, encoding, indent, canonical, use_attr, con
         RETVAL
 
 int
-_hash2xml2fh(fh, hash, root, version, encoding, indent, canonical, use_attr, content)
+_hash2xml2fh(fh, hash, root, version, encoding, indent, canonical, use_attr, content, xml_decl)
         void *fh;
         SV   *hash;
         char *root;
@@ -796,6 +801,7 @@ _hash2xml2fh(fh, hash, root, version, encoding, indent, canonical, use_attr, con
         I32   canonical;
         I32   use_attr;
         SV   *content;
+        I32   xml_decl;
     INIT:
         xmlOutputBufferPtr         buf  = NULL;
         xmlCharEncodingHandlerPtr  conv_hdlr = NULL;
@@ -814,6 +820,7 @@ _hash2xml2fh(fh, hash, root, version, encoding, indent, canonical, use_attr, con
         ctx.indent          = indent;
         ctx.canonical       = canonical;
         ctx.use_attr        = use_attr;
+        ctx.xml_decl        = xml_decl;
 
         if ( SvOK(content) )
             ctx.content = SvPV_nolen(content);

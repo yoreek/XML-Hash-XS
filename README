@@ -102,6 +102,16 @@ OPTIONS
 
         if use_attr is "0", converter will be use tags only.
 
+    content [ = undef ]
+        if defined that the key name for the text content(used only if
+        use_attr=1).
+
+    xml_decl [ = 1 ]
+        if xml_decl is "1", output will start with the XML declaration
+        '<?xml version="1.0" encoding="utf-8"?>'.
+
+        if xml_decl is "0", XML declaration will not be output.
+
 AUTHOR
         Yuriy Ustushenko, <<yoreek@yahoo.com>>
 

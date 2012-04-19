@@ -8,7 +8,7 @@ use warnings;
 use base 'Exporter';
 our @EXPORT_OK = our @EXPORT = qw( hash2xml );
 
-our $VERSION = '0.09';
+our $VERSION = '0.10';
 
 require XSLoader;
 XSLoader::load('XML::Hash::XS', $VERSION);
@@ -20,6 +20,7 @@ our $indent    = 0;
 our $canonical = 0;
 our $use_attr  = 0;
 our $content   = undef;
+our $xml_decl  = 1;
 
 my @OPTIONS_LIST = qw/
     root
@@ -29,6 +30,7 @@ my @OPTIONS_LIST = qw/
     canonical
     use_attr
     content
+    xml_decl
 /;
 
 sub hash2xml {
@@ -175,6 +177,12 @@ if use_attr is "0", converter will be use tags only.
 =item content [ = undef ]
 
 if defined that the key name for the text content(used only if use_attr=1).
+
+=item xml_decl [ = 1 ]
+
+if xml_decl is "1", output will start with the XML declaration '<?xml version="1.0" encoding="utf-8"?>'.
+
+if xml_decl is "0", XML declaration will not be output.
 
 =back
 
