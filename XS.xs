@@ -40,7 +40,11 @@
 #define BUFFER_WRITE_STRING(str)        xmlOutputBufferWriteString(ctx->buf, BAD_CAST str)
 #define BUFFER_WRITE_ESCAPE(str)        xmlOutputBufferWriteEscape(ctx->buf, BAD_CAST str, NULL)
 #define BUFFER_WRITE_ESCAPE_ATTR(str)   xmlOutputBufferWriteEscapeAttr(ctx->buf, BAD_CAST str)
+#ifdef LIBXML2_NEW_BUFFER
+#define BUFFER_WRITE_QUOTED(str)        xmlBufWriteQuotedString(ctx->buf->buffer, BAD_CAST str)
+#else
 #define BUFFER_WRITE_QUOTED(str)        xmlBufferWriteQuotedString(ctx->buf->buffer, BAD_CAST str)
+#endif
 
 typedef enum {
     TAG_OPEN,
@@ -764,12 +768,22 @@ _hash2xml2string(hash, root, version, encoding, indent, canonical, use_attr, con
         xmlOutputBufferFlush(ctx.buf);
 
         if (ctx.buf->conv != NULL) {
+#ifdef LIBXML2_NEW_BUFFER
+            len    = xmlBufUse(ctx.buf->conv);
+            result = xmlStrndup(xmlBufContent(ctx.buf->conv), len);
+#else
             len    = ctx.buf->conv->use;
             result = xmlStrndup(ctx.buf->conv->content, len);
+#endif
         }
         else {
+#ifdef LIBXML2_NEW_BUFFER
+            len    = xmlOutputBufferGetSize(ctx.buf);
+            result = xmlStrndup(xmlOutputBufferGetContent(ctx.buf), len);
+#else
             len    = ctx.buf->buffer->use;
             result = xmlStrndup(ctx.buf->buffer->content, len);
+#endif
         }
 
         (void) xmlOutputBufferClose(ctx.buf);

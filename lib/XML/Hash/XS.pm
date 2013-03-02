@@ -8,7 +8,7 @@ use warnings;
 use base 'Exporter';
 our @EXPORT_OK = our @EXPORT = qw( hash2xml );
 
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 
 require XSLoader;
 XSLoader::load('XML::Hash::XS', $VERSION);
