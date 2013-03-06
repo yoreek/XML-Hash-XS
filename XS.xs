@@ -32,6 +32,7 @@
 #define FLAG_SIMPLE                     1
 #define FLAG_COMPLEX                    2
 #define FLAG_CONTENT                    4
+#define FLAG_ATTR_ONLY                  8
 
 #define MAX_RECURSION_DEPTH             128
 
@@ -66,6 +67,9 @@ struct _stash_entity_t {
 };
 
 typedef struct {
+    /* 'NATIVE' or 'LX' */
+    char              *method;
+
     char              *version;
     char              *encoding;
     char              *root;
@@ -76,6 +80,17 @@ typedef struct {
     int                use_attr;
     char              *content;
     int                xml_decl;
+
+    /* LX options */
+    char              *attr;
+    int                attr_len;
+/* text = content
+    char              *text;
+*/
+    int                trim;
+    char              *cdata;
+    char              *comm;
+
     xmlOutputBufferPtr buf;
     stash_entity_t     stash;
 } convert_ctx_t;
@@ -85,6 +100,7 @@ const char indent_string[60] = "                                                
 void XMLHash_write_item_no_attr(convert_ctx_t *ctx, char *name, SV *value);
 int XMLHash_write_item(convert_ctx_t *ctx, char *name, SV *value, int flag);
 void XMLHash_write_hash(convert_ctx_t *ctx, char *name, SV *hash);
+void XMLHash_write_hash_lx(convert_ctx_t *ctx, SV *hash, int flag);
 
 static int
 cmpstringp(const void *p1, const void *p2)
@@ -93,6 +109,35 @@ cmpstringp(const void *p1, const void *p2)
     e1 = (hash_entity_t *) p1;
     e2 = (hash_entity_t *) p2;
     return strcmp(e1->key, e2->key);
+}
+
+char *
+XMLHash_trim_string(char *s)
+{
+    char *p, *end, ch;
+    int first = 1;
+
+    end = NULL;
+    for (p = s; *p != 0; p++) {
+        ch = *p;
+        if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r') {
+            if (first) {
+                s = p + 1;
+            }
+        }
+        else {
+            if (first) {
+                first--;
+            }
+            end = p + 1;
+        }
+    }
+
+    if (end != NULL) {
+        *end = 0;
+    }
+
+    return s;
 }
 
 int
@@ -139,6 +184,8 @@ XMLHash_write_tag(convert_ctx_t *ctx, tagType type, char *name, int indent, int 
 {
     int indent_len;
 
+    if (name == NULL) return;
+
     if (indent) {
         indent_len = ctx->indent_count * indent;
         if (indent_len > sizeof(indent_string))
@@ -183,7 +230,61 @@ XMLHash_write_content(convert_ctx_t *ctx, char *value, int indent, int lf)
         BUFFER_WRITE(indent_string, indent_len);
     }
 
+    if (ctx->trim) {
+        value = XMLHash_trim_string(value);
+    }
+
     BUFFER_WRITE_ESCAPE(value);
+
+    if (lf)
+        BUFFER_WRITE_CONSTANT("\n");
+}
+
+void
+XMLHash_write_cdata(convert_ctx_t *ctx, char *value, int indent, int lf)
+{
+    int indent_len;
+
+    if (indent) {
+        indent_len = ctx->indent_count * indent;
+        if (indent_len > sizeof(indent_string))
+            indent_len = sizeof(indent_string);
+
+        BUFFER_WRITE(indent_string, indent_len);
+    }
+
+    if (ctx->trim) {
+        value = XMLHash_trim_string(value);
+    }
+
+    BUFFER_WRITE_CONSTANT("<![CDATA[");
+    BUFFER_WRITE_STRING(value);
+    BUFFER_WRITE_CONSTANT("]]>");
+
+    if (lf)
+        BUFFER_WRITE_CONSTANT("\n");
+}
+
+void
+XMLHash_write_comment(convert_ctx_t *ctx, char *value, int indent, int lf)
+{
+    int indent_len;
+
+    if (indent) {
+        indent_len = ctx->indent_count * indent;
+        if (indent_len > sizeof(indent_string))
+            indent_len = sizeof(indent_string);
+
+        BUFFER_WRITE(indent_string, indent_len);
+    }
+
+    if (ctx->trim) {
+        value = XMLHash_trim_string(value);
+    }
+
+    BUFFER_WRITE_CONSTANT("<!--");
+    BUFFER_WRITE_STRING(value);
+    BUFFER_WRITE_CONSTANT("-->");
 
     if (lf)
         BUFFER_WRITE_CONSTANT("\n");
@@ -251,6 +352,8 @@ xmlOutputBufferWriteEscapeAttr(xmlOutputBufferPtr buf, const xmlChar * string)
 void
 XMLHash_write_attribute_element(convert_ctx_t *ctx, char *name, xmlChar *value)
 {
+    if (name == NULL) return;
+
     BUFFER_WRITE_CONSTANT(" ");
     BUFFER_WRITE_STRING(name);
     BUFFER_WRITE_CONSTANT("=\"");
@@ -688,6 +791,197 @@ XMLHash_write_hash(convert_ctx_t *ctx, char *name, SV *hash)
 }
 
 void
+XMLHash_write_hash_lx(convert_ctx_t *ctx, SV *value, int flag)
+{
+    SV   *value_ref, *hash_value, *hash_value_ref;
+    HV   *hv;
+    char *key;
+    I32   keylen;
+    int   len, i, raw = 0;
+
+    XMLHash_resolve_value(ctx, &value, &value_ref, &raw);
+
+    switch (SvTYPE(value)) {
+        case SVt_NULL:
+            XMLHash_write_content(ctx, "", ctx->indent, ctx->indent);
+            break;
+        case SVt_IV:
+        case SVt_PVIV:
+        case SVt_PVNV:
+        case SVt_NV:
+        case SVt_PV:
+            if (flag & FLAG_ATTR_ONLY) break;
+            XMLHash_write_content(ctx, SvPV_nolen(value), ctx->indent, ctx->indent);
+            break;
+        case SVt_PVAV:
+            len = av_len((AV *) value);
+            for (i = 0; i <= len; i++) {
+                XMLHash_write_hash_lx(ctx, *av_fetch((AV *) value, i, 0), flag);
+            }
+            break;
+        case SVt_PVHV:
+            hv  = (HV *) value;
+            len = HvUSEDKEYS(hv);
+            hv_iterinit(hv);
+
+            while ((hash_value = hv_iternextsv(hv, &key, &keylen))) {
+                if (ctx->cdata != NULL && strcmp(key, ctx->cdata) == 0) {
+                    if (flag & FLAG_ATTR_ONLY) continue;
+                    XMLHash_resolve_value(ctx, &hash_value, &hash_value_ref, &raw);
+                    switch (SvTYPE(hash_value)) {
+                        case SVt_NULL:
+                            break;
+                        case SVt_IV:
+                        case SVt_PVIV:
+                        case SVt_PVNV:
+                        case SVt_NV:
+                        case SVt_PV:
+                            XMLHash_write_cdata(ctx, SvPV_nolen(hash_value), ctx->indent, ctx->indent);
+                            break;
+                        case SVt_PVAV:
+                        case SVt_PVHV:
+                            break;
+                        case SVt_PVMG:
+                            if (SvOK(value)) {
+                                XMLHash_write_cdata(ctx, SvPV_nolen(hash_value), ctx->indent, ctx->indent);
+                                break;
+                            }
+                        default:
+                            XMLHash_write_cdata(ctx, SvPV_nolen(hash_value), ctx->indent, ctx->indent);
+                    }
+                }
+                else if (ctx->content != NULL && strcmp(key, ctx->content) == 0) {
+                    if (flag & FLAG_ATTR_ONLY) continue;
+                    XMLHash_resolve_value(ctx, &hash_value, &hash_value_ref, &raw);
+                    switch (SvTYPE(hash_value)) {
+                        case SVt_NULL:
+                            XMLHash_write_content(ctx, "", ctx->indent, ctx->indent);
+                            break;
+                        case SVt_IV:
+                        case SVt_PVIV:
+                        case SVt_PVNV:
+                        case SVt_NV:
+                        case SVt_PV:
+                            XMLHash_write_content(ctx, SvPV_nolen(hash_value), ctx->indent, ctx->indent);
+                            break;
+                        case SVt_PVAV:
+                        case SVt_PVHV:
+                            break;
+                        case SVt_PVMG:
+                            if (SvOK(value)) {
+                                XMLHash_write_content(ctx, SvPV_nolen(hash_value), ctx->indent, ctx->indent);
+                                break;
+                            }
+                        default:
+                            XMLHash_write_content(ctx, SvPV_nolen(hash_value), ctx->indent, ctx->indent);
+                    }
+                }
+                else if (ctx->comm != NULL && strcmp(key, ctx->comm) == 0) {
+                    if (flag & FLAG_ATTR_ONLY) continue;
+                    XMLHash_resolve_value(ctx, &hash_value, &hash_value_ref, &raw);
+                    switch (SvTYPE(hash_value)) {
+                        case SVt_NULL:
+                            XMLHash_write_comment(ctx, "", ctx->indent, ctx->indent);
+                            break;
+                        case SVt_IV:
+                        case SVt_PVIV:
+                        case SVt_PVNV:
+                        case SVt_NV:
+                        case SVt_PV:
+                            XMLHash_write_comment(ctx, SvPV_nolen(hash_value), ctx->indent, ctx->indent);
+                            break;
+                        case SVt_PVAV:
+                        case SVt_PVHV:
+                            break;
+                        case SVt_PVMG:
+                            if (SvOK(value)) {
+                                XMLHash_write_comment(ctx, SvPV_nolen(hash_value), ctx->indent, ctx->indent);
+                                break;
+                            }
+                        default:
+                            XMLHash_write_comment(ctx, SvPV_nolen(hash_value), ctx->indent, ctx->indent);
+                    }
+                }
+                else if (ctx->attr != NULL) {
+                    if (strncmp(key, ctx->attr, ctx->attr_len) == 0) {
+                        if (!(flag & FLAG_ATTR_ONLY)) continue;
+                        key += ctx->attr_len;
+                        XMLHash_resolve_value(ctx, &hash_value, &hash_value_ref, &raw);
+                        switch (SvTYPE(hash_value)) {
+                            case SVt_NULL:
+                                XMLHash_write_attribute_element(ctx, key, (xmlChar *) "");
+                                break;
+                            case SVt_IV:
+                            case SVt_PVIV:
+                            case SVt_PVNV:
+                            case SVt_NV:
+                            case SVt_PV:
+                                XMLHash_write_attribute_element(ctx, key, (xmlChar *) SvPV_nolen(hash_value));
+                                break;
+                            case SVt_PVAV:
+                            case SVt_PVHV:
+                                break;
+                            case SVt_PVMG:
+                                if (SvOK(value)) {
+                                    XMLHash_write_attribute_element(ctx, key, (xmlChar *) SvPV_nolen(hash_value));
+                                    break;
+                                }
+                            default:
+                                XMLHash_write_attribute_element(ctx, key, (xmlChar *) SvPV_nolen(hash_value));
+                        }
+                    }
+                    else {
+                        if (flag & FLAG_ATTR_ONLY) continue;
+                        if (SvTYPE(hash_value) == SVt_NULL) {
+                            XMLHash_write_tag(ctx, TAG_EMPTY, key, ctx->indent, ctx->indent);
+                        }
+                        else {
+                            XMLHash_write_tag(ctx, TAG_START, key, ctx->indent, 0);
+                            XMLHash_write_hash_lx(ctx, hash_value, FLAG_ATTR_ONLY);
+                            if (ctx->indent) {
+                                BUFFER_WRITE_CONSTANT(">\n");
+                            }
+                            else {
+                                BUFFER_WRITE_CONSTANT(">");
+                            }
+                            ctx->indent_count++;
+                            XMLHash_write_hash_lx(ctx, hash_value, 0);
+                            ctx->indent_count--;
+                            XMLHash_write_tag(ctx, TAG_CLOSE, key, ctx->indent, ctx->indent);
+                        }
+                    }
+                }
+                else {
+                    if (SvTYPE(hash_value) == SVt_NULL) {
+                        XMLHash_write_tag(ctx, TAG_EMPTY, key, ctx->indent, ctx->indent);
+                    }
+                    else {
+                        XMLHash_write_tag(ctx, TAG_OPEN, key, ctx->indent, ctx->indent);
+                        ctx->indent_count++;
+                        XMLHash_write_hash_lx(ctx, hash_value, 0);
+                        ctx->indent_count--;
+                        XMLHash_write_tag(ctx, TAG_CLOSE, key, ctx->indent, ctx->indent);
+                    }
+                }
+            }
+
+            break;
+        case SVt_PVMG:
+            /* blessed */
+            if (flag & FLAG_ATTR_ONLY) break;
+            if (SvOK(value)) {
+                XMLHash_write_content(ctx, SvPV_nolen(value), ctx->indent, ctx->indent);
+                break;
+            }
+        default:
+            if (flag & FLAG_ATTR_ONLY) break;
+            XMLHash_write_content(ctx, SvPV_nolen(value), ctx->indent, ctx->indent);
+    }
+
+    ctx->recursion_depth--;
+}
+
+void
 XMLHash_hash2xml(convert_ctx_t *ctx, SV *hash)
 {
     if (ctx->xml_decl) {
@@ -702,10 +996,14 @@ XMLHash_hash2xml(convert_ctx_t *ctx, SV *hash)
     dXCPT;
 
     XCPT_TRY_START {
-        if (ctx->use_attr) {
+        if (ctx->method != NULL && strcmp(ctx->method, "LX") == 0) {
+            XMLHash_write_hash_lx(ctx, hash, 0);
+        } else if (ctx->use_attr) {
+            ctx->trim = 0;
             XMLHash_write_hash(ctx, ctx->root, hash);
         }
         else {
+            ctx->trim = 0;
             XMLHash_write_hash_no_attr(ctx, ctx->root, hash);
         }
         XMLHash_stash_clean(&ctx->stash);
@@ -725,8 +1023,10 @@ MODULE = XML::Hash::XS PACKAGE = XML::Hash::XS
 PROTOTYPES: DISABLE
 
 SV *
-_hash2xml2string(hash, root, version, encoding, indent, canonical, use_attr, content, xml_decl)
+_hash2xml2string(hash, method, root, version, encoding, indent, canonical, use_attr, content, xml_decl, attr, text, trim, cdata, comm)
+
         SV   *hash;
+        char *method;
         char *root;
         char *version;
         char *encoding;
@@ -735,7 +1035,13 @@ _hash2xml2string(hash, root, version, encoding, indent, canonical, use_attr, con
         I32   use_attr;
         SV   *content;
         I32   xml_decl;
+        SV   *attr;
+        SV   *text;
+        I32   trim
+        SV   *cdata;
+        SV   *comm;
     INIT:
+        STRLEN                     strlen;
         xmlChar                   *result    = NULL;
         int                        len       = 0;
         xmlCharEncodingHandlerPtr  conv_hdlr = NULL;
@@ -745,6 +1051,7 @@ _hash2xml2string(hash, root, version, encoding, indent, canonical, use_attr, con
 
         memset(&ctx, 0, sizeof(convert_ctx_t));
 
+        ctx.method          = method;
         ctx.root            = root;
         ctx.version         = version;
         ctx.encoding        = encoding;
@@ -752,9 +1059,25 @@ _hash2xml2string(hash, root, version, encoding, indent, canonical, use_attr, con
         ctx.canonical       = canonical;
         ctx.use_attr        = use_attr;
         ctx.xml_decl        = xml_decl;
+        ctx.trim            = trim;
 
-        if ( SvOK(content) )
+        if ( SvOK(content) ) {
             ctx.content = SvPV_nolen(content);
+        }
+        else if ( SvOK(text) ) {
+            ctx.content = SvPV_nolen(text);
+        }
+
+        if ( SvOK(attr) ) {
+            ctx.attr     = SvPV(attr, strlen);
+            ctx.attr_len = strlen;
+        }
+
+        if ( SvOK(cdata) )
+            ctx.cdata = SvPV_nolen(cdata);
+
+        if ( SvOK(comm) )
+            ctx.comm = SvPV_nolen(comm);
 
         conv_hdlr = xmlFindCharEncodingHandler(encoding);
         if ( conv_hdlr == NULL )
@@ -805,9 +1128,11 @@ _hash2xml2string(hash, root, version, encoding, indent, canonical, use_attr, con
         RETVAL
 
 int
-_hash2xml2fh(fh, hash, root, version, encoding, indent, canonical, use_attr, content, xml_decl)
+_hash2xml2fh(fh, hash, method, root, version, encoding, indent, canonical, use_attr, content, xml_decl, attr, text, trim, cdata, comm)
+
         void *fh;
         SV   *hash;
+        char *method;
         char *root;
         char *version;
         char *encoding;
@@ -816,7 +1141,13 @@ _hash2xml2fh(fh, hash, root, version, encoding, indent, canonical, use_attr, con
         I32   use_attr;
         SV   *content;
         I32   xml_decl;
+        SV   *attr;
+        SV   *text;
+        I32   trim
+        SV   *cdata;
+        SV   *comm;
     INIT:
+        STRLEN                     strlen;
         xmlOutputBufferPtr         buf  = NULL;
         xmlCharEncodingHandlerPtr  conv_hdlr = NULL;
         MAGIC                     *mg;
@@ -828,6 +1159,7 @@ _hash2xml2fh(fh, hash, root, version, encoding, indent, canonical, use_attr, con
     CODE:
         memset(&ctx, 0, sizeof(convert_ctx_t));
 
+        ctx.method          = method;
         ctx.root            = root;
         ctx.version         = version;
         ctx.encoding        = encoding;
@@ -835,9 +1167,25 @@ _hash2xml2fh(fh, hash, root, version, encoding, indent, canonical, use_attr, con
         ctx.canonical       = canonical;
         ctx.use_attr        = use_attr;
         ctx.xml_decl        = xml_decl;
+        ctx.trim            = trim;
 
-        if ( SvOK(content) )
+        if ( SvOK(content) ) {
             ctx.content = SvPV_nolen(content);
+        }
+        else if ( SvOK(text) ) {
+            ctx.content = SvPV_nolen(text);
+        }
+
+        if ( SvOK(attr) ) {
+            ctx.attr     = SvPV(attr, strlen);
+            ctx.attr_len = strlen;
+        }
+
+        if ( SvOK(cdata) )
+            ctx.cdata = SvPV_nolen(cdata);
+
+        if ( SvOK(comm) )
+            ctx.comm = SvPV_nolen(comm);
 
         conv_hdlr = xmlFindCharEncodingHandler(encoding);
         if ( conv_hdlr == NULL )

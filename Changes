@@ -1,7 +1,10 @@
 Revision history for XML::Hash::XS.
 
-0.11	2013-03-02
-		Fix for compatibility with version 2.9.0 library libxml2
+0.12    2013-03-06
+        Experimental support the conversion method of the XML::Hash::LX library.
+
+0.11    2013-03-02
+        Fix for compatibility with version 2.9.0 library libxml2
 
 0.10    2012-04-19
         New option "xml_decl".

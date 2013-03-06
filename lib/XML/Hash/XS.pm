@@ -8,11 +8,15 @@ use warnings;
 use base 'Exporter';
 our @EXPORT_OK = our @EXPORT = qw( hash2xml );
 
-our $VERSION = '0.11';
+our $VERSION = '0.12';
 
 require XSLoader;
 XSLoader::load('XML::Hash::XS', $VERSION);
 
+# 'NATIVE' or 'LX'
+our $method    = 'NATIVE';
+
+# native options
 our $root      = 'root';
 our $version   = '1.0';
 our $encoding  = 'utf-8';
@@ -22,7 +26,15 @@ our $use_attr  = 0;
 our $content   = undef;
 our $xml_decl  = 1;
 
+# XML::Hash::LX options
+our $attr      = '-';
+our $text      = '#text';
+our $trim      = 1;
+our $cdata     = undef;
+our $comm      = undef;
+
 my @OPTIONS_LIST = qw/
+    method
     root
     version
     encoding
@@ -31,6 +43,11 @@ my @OPTIONS_LIST = qw/
     use_attr
     content
     xml_decl
+    attr
+    text
+    trim
+    cdata
+    comm
 /;
 
 sub hash2xml {
@@ -183,6 +200,24 @@ if defined that the key name for the text content(used only if use_attr=1).
 if xml_decl is "1", output will start with the XML declaration '<?xml version="1.0" encoding="utf-8"?>'.
 
 if xml_decl is "0", XML declaration will not be output.
+
+=item content [ = undef ]
+
+if defined this options spicify a key name for storing text
+
+=item method [ = 'NATIVE' ]
+
+experimental support the conversion methods other libraries
+
+if method is 'LX' then conversion result is the same as using L<XML::Hash::LX> library
+
+Note: for 'LX' method following options are available:
+    encoding
+    attr
+    text
+    trim
+    cdata
+    comm
 
 =back
 
