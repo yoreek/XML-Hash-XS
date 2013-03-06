@@ -8,5 +8,6 @@ ppport.h
 README
 t/00-load.t
 t/01-conv.t
+t/02-conv-lx.t
 typemap
 XS.xs
