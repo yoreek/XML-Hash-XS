@@ -67,6 +67,17 @@ FUNCTIONS
           <node5 node51="value51"/>
         </root>
 
+    Compose benchmark:
+
+                       Rate        Hash    Hash::LX      Simple Hash::XS(LX)    Hash::XS
+        Hash         43.7/s          --        -12%        -38%         -98%        -98%
+        Hash::LX     49.6/s         14%          --        -30%         -97%        -98%
+        Simple       70.9/s         62%         43%          --         -96%        -96%
+        Hash::XS(LX) 1786/s       3986%       3498%       2420%           --        -11%
+        Hash::XS     2000/s       4476%       3930%       2722%          12%          --
+
+    Benchmark was done on <http://search.cpan.org/uploads.rdf>
+
 OPTIONS
     root [ = 'root' ]
         Root node name.
@@ -111,6 +122,18 @@ OPTIONS
         '<?xml version="1.0" encoding="utf-8"?>'.
 
         if xml_decl is "0", XML declaration will not be output.
+
+    content [ = undef ]
+        if defined this options spicify a key name for storing text
+
+    method [ = 'NATIVE' ]
+        experimental support the conversion methods other libraries
+
+        if method is 'LX' then conversion result is the same as using
+        XML::Hash::LX library
+
+        Note: for 'LX' method following options are available: encoding attr
+        text trim cdata comm
 
 AUTHOR
         Yuriy Ustushenko, <<yoreek@yahoo.com>>
