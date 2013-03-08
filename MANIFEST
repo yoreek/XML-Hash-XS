@@ -10,5 +10,6 @@ README
 t/00-load.t
 t/01-conv.t
 t/02-conv-lx.t
+t/03-oop-conv.t
 typemap
 XS.xs
