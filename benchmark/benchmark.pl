@@ -1,6 +1,7 @@
 #!/usr/bin/env perl
 
 use FindBin;
+use lib ("$FindBin::Bin/../blib/lib", "$FindBin::Bin/../blib/arch");
 use LWP::Simple 'get';
 use XML::Hash::LX;
 use XML::Hash;
@@ -13,6 +14,7 @@ my $xml = getXml();
 my $xh_hash = $xml_converter->fromXMLStringtoHash($xml);
 my $lx_hash = xml2hash($xml);
 my $xs_hash = XMLin($xml);
+my $xs_conv = XML::Hash::XS->new();
 
 cmpthese timethese 1000, {
 	'Hash' => sub {
@@ -27,8 +29,11 @@ cmpthese timethese 1000, {
 	'Hash::XS' => sub {
 		my $oxml = XML::Hash::XS::hash2xml($xs_hash);
 	},
+	'Hash::XS(OOP)' => sub {
+		my $oxml = $xs_conv->hash2xml($xs_hash);
+	},
 	'Hash::XS(LX)' => sub {
-		my $oxml = XML::Hash::XS::hash2xml($lx_hash, mode => 'LX');
+		my $oxml = XML::Hash::XS::hash2xml($lx_hash, method => 'LX');
 	},
 };
 

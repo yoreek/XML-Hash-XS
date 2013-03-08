@@ -47,8 +47,8 @@ our $data;
 }
 {
 	is
-		$data = hash2xml( { node => { sub => { '@' => 'test' } } }, cdata => '@' ),
-		qq{$xml<node><sub><![CDATA[test]]></sub></node>},
+		$data = hash2xml( { node => { sub => { '@' => '<test&/>' } } }, cdata => '@' ),
+		qq{$xml<node><sub><![CDATA[<test&/>]]></sub></node>},
 		'cdata @',
 	;
 }

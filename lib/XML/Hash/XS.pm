@@ -8,7 +8,7 @@ use warnings;
 use base 'Exporter';
 our @EXPORT_OK = our @EXPORT = qw( hash2xml );
 
-our $VERSION = '0.12_01';
+our $VERSION = '0.13';
 
 require XSLoader;
 XSLoader::load('XML::Hash::XS', $VERSION);
@@ -17,6 +17,7 @@ XSLoader::load('XML::Hash::XS', $VERSION);
 our $method    = 'NATIVE';
 
 # native options
+our $output    = undef;
 our $root      = 'root';
 our $version   = '1.0';
 our $encoding  = 'utf-8';
@@ -33,45 +34,6 @@ our $trim      = 1;
 our $cdata     = undef;
 our $comm      = undef;
 
-my @OPTIONS_LIST = qw/
-    method
-    root
-    version
-    encoding
-    indent
-    canonical
-    use_attr
-    content
-    xml_decl
-    attr
-    text
-    trim
-    cdata
-    comm
-/;
-
-sub hash2xml {
-	my ($hash, @options) = @_;
-
-    my %options = (
-        (map {$_ => ${$_}} @OPTIONS_LIST),
-        output => 'string',
-        @options,
-    );
-
-    my $output = $options{output};
-
-    if ( $output eq 'string' ) {
-        _hash2xml2string( $hash, @options{@OPTIONS_LIST} );
-    }
-    elsif ( ref($output) ) {
-        _hash2xml2fh( $output, $hash, @options{@OPTIONS_LIST} );
-    }
-    else {
-        die "Invalid output type";
-    }
-}
-
 1;
 __END__
 =head1 NAME
@@ -84,6 +46,13 @@ XML::Hash::XS - Simple and fast hash to XML conversion
 
     my $xmlstr = hash2xml \%hash;
     hash2xml \%hash, output => $FH;
+
+Or OOP way:
+
+    use XML::Hash::XS qw();
+
+    my $conv = XML::Hash::XS->new([<options>])
+    my $xmlstr = $conv->hash2xml(\%hash, [<options>]);
 
 =head1 DESCRIPTION
 
@@ -242,7 +211,7 @@ Yuriy Ustushenko, E<lt><yoreek@yahoo.com>E<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2012 Yuriy Ustushenko
+Copyright (C) 2013 Yuriy Ustushenko
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

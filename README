@@ -7,6 +7,13 @@ SYNOPSIS
         my $xmlstr = hash2xml \%hash;
         hash2xml \%hash, output => $FH;
 
+    Or OOP way:
+
+        use XML::Hash::XS qw();
+
+        my $conv = XML::Hash::XS->new([<options>])
+        my $xmlstr = $conv->hash2xml(\%hash, [<options>]);
+
 DESCRIPTION
     This module implements simple hash to XML converter written in C using
     libxml2 library.
@@ -139,7 +146,7 @@ AUTHOR
         Yuriy Ustushenko, <<yoreek@yahoo.com>>
 
 COPYRIGHT AND LICENSE
-    Copyright (C) 2012 Yuriy Ustushenko
+    Copyright (C) 2013 Yuriy Ustushenko
 
     This library is free software; you can redistribute it and/or modify it
     under the same terms as Perl itself.
