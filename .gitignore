@@ -7,7 +7,9 @@
 *.obj
 *.bs
 *.bak
+*.tar.gz
 XS.c
+benchmark/uploads.rdf
 
 blib/
 .build/

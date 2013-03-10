@@ -36,16 +36,12 @@
 
 #define MAX_RECURSION_DEPTH             128
 
-#define BUFFER_WRITE(str, len)          xmlOutputBufferWrite(ctx->buf, len, str)
-#define BUFFER_WRITE_CONSTANT(str)      xmlOutputBufferWrite(ctx->buf, sizeof(str) - 1, str)
-#define BUFFER_WRITE_STRING(str)        xmlOutputBufferWriteString(ctx->buf, BAD_CAST str)
-#define BUFFER_WRITE_ESCAPE(str)        xmlOutputBufferWriteEscape(ctx->buf, BAD_CAST str, NULL)
-#define BUFFER_WRITE_ESCAPE_ATTR(str)   xmlOutputBufferWriteEscapeAttr(ctx->buf, BAD_CAST str)
-#ifdef LIBXML2_NEW_BUFFER
-#define BUFFER_WRITE_QUOTED(str)        xmlBufWriteQuotedString(ctx->buf->buffer, BAD_CAST str)
-#else
-#define BUFFER_WRITE_QUOTED(str)        xmlBufferWriteQuotedString(ctx->buf->buffer, BAD_CAST str)
-#endif
+#define BUFFER_WRITE(str, len)          XMLHash_writer_write(ctx->writer, str, len)
+#define BUFFER_WRITE_CONSTANT(str)      XMLHash_writer_write(ctx->writer, str, sizeof(str) - 1)
+#define BUFFER_WRITE_STRING(str,len)    XMLHash_writer_write(ctx->writer, str, len)
+#define BUFFER_WRITE_ESCAPE(str, len)   XMLHash_writer_escape_content(ctx->writer, str, len)
+#define BUFFER_WRITE_ESCAPE_ATTR(str)   XMLHash_writer_escape_attr(ctx->writer, str)
+#define BUFFER_WRITE_QUOTED(str)        XMLHash_writer_write_quoted_string(ctx->writer, str)
 
 #ifndef FALSE
 #define FALSE (0)
@@ -130,6 +126,32 @@ typedef enum {
     CONV_METHOD_LX,
 } convMethodType;
 
+typedef int (*conv_write_callback_t)(void * context, const char * buf, int len);
+typedef int (*conv_close_callback_t)(void * context);
+
+typedef struct _conv_buffer_t conv_buffer_t;
+struct _conv_buffer_t {
+    char          *pos;
+    char          *start;
+    char          *end;
+    conv_buffer_t *prev;
+};
+
+typedef struct _conv_encoder_t conv_encoder_t;
+struct _conv_encoder_t {
+};
+
+typedef struct _conv_writer_t conv_writer_t;
+struct _conv_writer_t {
+    conv_write_callback_t *write_callback;
+    conv_close_callback_t *close_callback;
+    conv_encoder_t        *encoder;
+    SV                    *perl_buf;
+    char                  *buf;
+    char                  *buf_pos;
+    char                  *buf_end;
+};
+
 struct _conv_opts_t {
     convMethodType            method;
 
@@ -178,14 +200,258 @@ typedef struct {
     int                indent_count;
     xmlOutputBufferPtr buf;
     stash_entity_t     stash;
+    conv_writer_t     *writer;
 } convert_ctx_t;
 
 const char indent_string[60] = "                                                            ";
 
-void XMLHash_write_item_no_attr(convert_ctx_t *ctx, char *name, SV *value);
-int XMLHash_write_item(convert_ctx_t *ctx, char *name, SV *value, int flag);
-void XMLHash_write_hash(convert_ctx_t *ctx, char *name, SV *hash);
-void XMLHash_write_hash_lx(convert_ctx_t *ctx, SV *hash, int flag);
+INLINE void XMLHash_write_item_no_attr(convert_ctx_t *ctx, char *name, SV *value);
+INLINE int  XMLHash_write_item(convert_ctx_t *ctx, char *name, SV *value, int flag);
+INLINE void XMLHash_write_hash(convert_ctx_t *ctx, char *name, SV *hash);
+INLINE void XMLHash_write_hash_lx(convert_ctx_t *ctx, SV *hash, int flag);
+
+void
+XMLHash_writer_resize_buffer(conv_writer_t *writer, int add_size)
+{
+    int use  = writer->buf_pos - writer->buf;
+    int size = writer->buf_end - writer->buf;
+    if (add_size == 0 || add_size < size) {
+        add_size = size;
+    }
+
+    SvCUR_set(writer->perl_buf, use);
+    SvGROW(writer->perl_buf, size + add_size);
+    writer->buf       = SvPVX(writer->perl_buf);
+    writer->buf_pos   = writer->buf + use;
+    writer->buf_end   = writer->buf + size + add_size;
+}
+
+conv_writer_t *
+XMLHash_writer_create(int size)
+{
+    conv_writer_t *writer;
+
+    writer = malloc(sizeof(conv_writer_t));
+    if (writer == NULL) {
+        croak("Memory allocation error");
+    }
+    memset(writer, 0, sizeof(conv_writer_t));
+
+    writer->perl_buf = newSV(size);
+    sv_setpv(writer->perl_buf, "");
+
+    writer->buf      = writer->buf_pos = SvPVX(writer->perl_buf);
+    writer->buf_end  = writer->buf + size;
+
+    return writer;
+}
+
+INLINE void
+XMLHash_writer_write(conv_writer_t *writer, const char *content, int len) {
+    if (len > (writer->buf_end - writer->buf_pos -1)) {
+        XMLHash_writer_resize_buffer(writer, len + 1);
+    }
+
+    if (len < 17) {
+        while (len--) {
+            *writer->buf_pos++ = *content++;
+        }
+    }
+    else {
+        memcpy(writer->buf_pos, content, len);
+        writer->buf_pos += len;
+    }
+}
+
+void
+XMLHash_writer_write_quoted_string(conv_writer_t *writer, const char *content)
+{
+    char ch;
+    const char *cur;
+    int  len = 0;
+    int  dq  = 0;
+    int  sq  = 0;
+
+    cur = content;
+    while ((ch = *cur++) != '\0') {
+        len++;
+        if (ch == '"') {
+            dq++;
+        }
+        else if (ch == '\'') {
+            sq++;
+        }
+    }
+
+    if (len == 0) return;
+
+    len *= 6;
+
+    if (len > (writer->buf_end - writer->buf_pos -1)) {
+        XMLHash_writer_resize_buffer(writer, len + 1);
+    }
+
+    if (dq) {
+        if (sq) {
+            *writer->buf_pos++ = '"';
+            while ((ch = *content++) != '\0') {
+                if (ch == '"') {
+                    *writer->buf_pos++ = '&';
+                    *writer->buf_pos++ = 'q';
+                    *writer->buf_pos++ = 'u';
+                    *writer->buf_pos++ = 'o';
+                    *writer->buf_pos++ = 't';
+                    *writer->buf_pos++ = ';';
+                }
+                else {
+                    *writer->buf_pos++ = ch;
+                }
+            }
+            *writer->buf_pos++ = '"';
+        }
+        else {
+            *writer->buf_pos++ = '\'';
+            while ((ch = *content++) != '\0') {
+                *writer->buf_pos++ = ch;
+            }
+            *writer->buf_pos++ = '\'';
+        }
+    }
+    else {
+        *writer->buf_pos++ = '"';
+        while ((ch = *content++) != '\0') {
+            *writer->buf_pos++ = ch;
+        }
+        *writer->buf_pos++ = '"';
+    }
+}
+
+INLINE void
+XMLHash_writer_escape_attr(conv_writer_t *writer, const char *content)
+{
+    char ch;
+    int len = strlen(content) * 6;
+
+    if (len > (writer->buf_end - writer->buf_pos -1)) {
+        XMLHash_writer_resize_buffer(writer, len + 1);
+    }
+
+    while ((ch = *content++) != 0) {
+        switch (ch) {
+            case '\n':
+                *writer->buf_pos++ = '&';
+                *writer->buf_pos++ = '#';
+                *writer->buf_pos++ = '1';
+                *writer->buf_pos++ = '0';
+                *writer->buf_pos++ = ';';
+                break;
+            case '\r':
+                *writer->buf_pos++ = '&';
+                *writer->buf_pos++ = '#';
+                *writer->buf_pos++ = '1';
+                *writer->buf_pos++ = '3';
+                *writer->buf_pos++ = ';';
+                break;
+            case '\t':
+                *writer->buf_pos++ = '&';
+                *writer->buf_pos++ = '#';
+                *writer->buf_pos++ = '9';
+                *writer->buf_pos++ = ';';
+                break;
+            case '<':
+                *writer->buf_pos++ = '&';
+                *writer->buf_pos++ = 'l';
+                *writer->buf_pos++ = 't';
+                *writer->buf_pos++ = ';';
+                break;
+            case '>':
+                *writer->buf_pos++ = '&';
+                *writer->buf_pos++ = 'g';
+                *writer->buf_pos++ = 't';
+                *writer->buf_pos++ = ';';
+                break;
+            case '&':
+                *writer->buf_pos++ = '&';
+                *writer->buf_pos++ = 'a';
+                *writer->buf_pos++ = 'm';
+                *writer->buf_pos++ = 'p';
+                *writer->buf_pos++ = ';';
+                break;
+            case '"':
+                *writer->buf_pos++ = '&';
+                *writer->buf_pos++ = 'q';
+                *writer->buf_pos++ = 'u';
+                *writer->buf_pos++ = 'o';
+                *writer->buf_pos++ = 't';
+                *writer->buf_pos++ = ';';
+                break;
+            default:
+                *writer->buf_pos++ = ch;
+        }
+    }
+}
+
+INLINE void
+XMLHash_writer_escape_content(conv_writer_t *writer, const char *content, int len)
+{
+    char ch;
+    int max_len;
+
+    if (len == -1) len = strlen(content);
+    max_len = len * 5;
+
+    if (max_len > (writer->buf_end - writer->buf_pos - 1)) {
+        XMLHash_writer_resize_buffer(writer, max_len + 1);
+    }
+
+    while (len--) {
+        ch = *content++;
+        switch (ch) {
+            case '\r':
+                *writer->buf_pos++ = '&';
+                *writer->buf_pos++ = '#';
+                *writer->buf_pos++ = '1';
+                *writer->buf_pos++ = '3';
+                *writer->buf_pos++ = ';';
+                break;
+            case '<':
+                *writer->buf_pos++ = '&';
+                *writer->buf_pos++ = 'l';
+                *writer->buf_pos++ = 't';
+                *writer->buf_pos++ = ';';
+                break;
+            case '>':
+                *writer->buf_pos++ = '&';
+                *writer->buf_pos++ = 'g';
+                *writer->buf_pos++ = 't';
+                *writer->buf_pos++ = ';';
+                break;
+            case '&':
+                *writer->buf_pos++ = '&';
+                *writer->buf_pos++ = 'a';
+                *writer->buf_pos++ = 'm';
+                *writer->buf_pos++ = 'p';
+                *writer->buf_pos++ = ';';
+                break;
+            default:
+                *writer->buf_pos++ = ch;
+        }
+    }
+}
+
+SV *
+XMLHash_writer_flush(conv_writer_t *writer)
+{
+    *writer->buf_pos = '\0';
+    SvCUR_set(writer->perl_buf, writer->buf_pos - writer->buf);
+    return writer->perl_buf;
+}
+
+void
+XMLHash_writer_destroy(conv_writer_t *writer)
+{
+    free(writer);
+}
 
 static int
 cmpstringp(const void *p1, const void *p2)
@@ -196,31 +462,28 @@ cmpstringp(const void *p1, const void *p2)
     return strcmp(e1->key, e2->key);
 }
 
-char *
-XMLHash_trim_string(char *s)
+INLINE char *
+XMLHash_trim_string(char *s, int *len)
 {
-    char *p, *end, ch;
+    char *cur, *end, ch;
     int first = 1;
 
-    end = NULL;
-    for (p = s; *p != 0; p++) {
-        ch = *p;
+    end = cur = s;
+    while ((ch = *cur++) != '\0') {
         if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r') {
             if (first) {
-                s = p + 1;
+                s = end = cur;
             }
         }
         else {
             if (first) {
                 first--;
             }
-            end = p + 1;
+            end = cur;
         }
     }
 
-    if (end != NULL) {
-        *end = 0;
-    }
+    *len = end - s;
 
     return s;
 }
@@ -264,7 +527,7 @@ XMLHash_close_handler(void *fh)
     return 1;
 }
 
-void
+INLINE void
 XMLHash_write_tag(convert_ctx_t *ctx, tagType type, char *name, int indent, int lf)
 {
     int indent_len;
@@ -289,7 +552,7 @@ XMLHash_write_tag(convert_ctx_t *ctx, tagType type, char *name, int indent, int 
     if (name[0] >= '1' && name[0] <= '9')
         BUFFER_WRITE_CONSTANT("_");
 
-    BUFFER_WRITE_STRING(name);
+    BUFFER_WRITE_STRING(name, strlen(name));
 
     if (type == TAG_EMPTY) {
         BUFFER_WRITE_CONSTANT("/>");
@@ -302,10 +565,10 @@ XMLHash_write_tag(convert_ctx_t *ctx, tagType type, char *name, int indent, int 
         BUFFER_WRITE_CONSTANT("\n");
 }
 
-void
+INLINE void
 XMLHash_write_content(convert_ctx_t *ctx, char *value, int indent, int lf)
 {
-    int indent_len;
+    int indent_len, str_len;
 
     if (indent) {
         indent_len = ctx->indent_count * indent;
@@ -316,19 +579,21 @@ XMLHash_write_content(convert_ctx_t *ctx, char *value, int indent, int lf)
     }
 
     if (ctx->opts.trim) {
-        value = XMLHash_trim_string(value);
+        value = XMLHash_trim_string(value, &str_len);
+        BUFFER_WRITE_ESCAPE(value, str_len);
     }
-
-    BUFFER_WRITE_ESCAPE(value);
+    else {
+        BUFFER_WRITE_ESCAPE(value, -1);
+    }
 
     if (lf)
         BUFFER_WRITE_CONSTANT("\n");
 }
 
-void
+INLINE void
 XMLHash_write_cdata(convert_ctx_t *ctx, char *value, int indent, int lf)
 {
-    int indent_len;
+    int indent_len, str_len;
 
     if (indent) {
         indent_len = ctx->indent_count * indent;
@@ -338,12 +603,14 @@ XMLHash_write_cdata(convert_ctx_t *ctx, char *value, int indent, int lf)
         BUFFER_WRITE(indent_string, indent_len);
     }
 
-    if (ctx->opts.trim) {
-        value = XMLHash_trim_string(value);
-    }
-
     BUFFER_WRITE_CONSTANT("<![CDATA[");
-    BUFFER_WRITE_STRING(value);
+    if (ctx->opts.trim) {
+        value = XMLHash_trim_string(value, &str_len);
+        BUFFER_WRITE_STRING(value, str_len);
+    }
+    else {
+        BUFFER_WRITE_STRING(value, strlen(value));
+    }
     BUFFER_WRITE_CONSTANT("]]>");
 
     if (lf)
@@ -353,7 +620,7 @@ XMLHash_write_cdata(convert_ctx_t *ctx, char *value, int indent, int lf)
 void
 XMLHash_write_comment(convert_ctx_t *ctx, char *value, int indent, int lf)
 {
-    int indent_len;
+    int indent_len, str_len;
 
     if (indent) {
         indent_len = ctx->indent_count * indent;
@@ -363,84 +630,27 @@ XMLHash_write_comment(convert_ctx_t *ctx, char *value, int indent, int lf)
         BUFFER_WRITE(indent_string, indent_len);
     }
 
-    if (ctx->opts.trim) {
-        value = XMLHash_trim_string(value);
-    }
-
     BUFFER_WRITE_CONSTANT("<!--");
-    BUFFER_WRITE_STRING(value);
+    if (ctx->opts.trim) {
+        value = XMLHash_trim_string(value, &str_len);
+        BUFFER_WRITE_STRING(value, str_len);
+    }
+    else {
+        BUFFER_WRITE_STRING(value, strlen(value));
+    }
     BUFFER_WRITE_CONSTANT("-->");
 
     if (lf)
         BUFFER_WRITE_CONSTANT("\n");
 }
 
-void
-xmlOutputBufferWriteEscapeAttr(xmlOutputBufferPtr buf, const xmlChar * string)
-{
-    xmlChar *base, *cur;
-
-    if (string == NULL)
-        return;
-    base = cur = (xmlChar *) string;
-    while (*cur != 0) {
-        if (*cur == '\n') {
-            if (base != cur)
-                xmlOutputBufferWrite(buf, cur - base, base);
-            xmlOutputBufferWrite(buf, 5, BAD_CAST "&#10;");
-            cur++;
-            base = cur;
-        } else if (*cur == '\r') {
-            if (base != cur)
-                xmlOutputBufferWrite(buf, cur - base, base);
-            xmlOutputBufferWrite(buf, 5, BAD_CAST "&#13;");
-            cur++;
-            base = cur;
-        } else if (*cur == '\t') {
-            if (base != cur)
-                xmlOutputBufferWrite(buf, cur - base, base);
-            xmlOutputBufferWrite(buf, 4, BAD_CAST "&#9;");
-            cur++;
-            base = cur;
-        } else if (*cur == '"') {
-            if (base != cur)
-                xmlOutputBufferWrite(buf, cur - base, base);
-            xmlOutputBufferWrite(buf, 6, BAD_CAST "&quot;");
-            cur++;
-            base = cur;
-        } else if (*cur == '<') {
-            if (base != cur)
-                xmlOutputBufferWrite(buf, cur - base, base);
-            xmlOutputBufferWrite(buf, 4, BAD_CAST "&lt;");
-            cur++;
-            base = cur;
-        } else if (*cur == '>') {
-            if (base != cur)
-                xmlOutputBufferWrite(buf, cur - base, base);
-            xmlOutputBufferWrite(buf, 4, BAD_CAST "&gt;");
-            cur++;
-            base = cur;
-        } else if (*cur == '&') {
-            if (base != cur)
-                xmlOutputBufferWrite(buf, cur - base, base);
-            xmlOutputBufferWrite(buf, 5, BAD_CAST "&amp;");
-            cur++;
-            base = cur;
-        } else {
-            cur++;
-        }
-    }
-    if (base != cur)
-        xmlOutputBufferWrite(buf, cur - base, base);
-}
-
-void
+INLINE void
 XMLHash_write_attribute_element(convert_ctx_t *ctx, char *name, xmlChar *value)
 {
     if (name == NULL) return;
 
     BUFFER_WRITE_CONSTANT(" ");
-    BUFFER_WRITE_STRING(name);
+    BUFFER_WRITE_STRING(name, strlen(name));
     BUFFER_WRITE_CONSTANT("=\"");
     BUFFER_WRITE_ESCAPE_ATTR(value);
     BUFFER_WRITE_CONSTANT("\"");
@@ -472,7 +682,7 @@ XMLHash_stash_clean(stash_entity_t *stash)
     }
 }
 
-void
+INLINE void
 XMLHash_resolve_value(convert_ctx_t *ctx, SV **value, SV **value_ref, int *raw)
 {
     int count;
@@ -554,7 +764,7 @@ XMLHash_resolve_value(convert_ctx_t *ctx, SV **value, SV **value_ref, int *raw)
     }
 }
 
-void
+INLINE void
 XMLHash_write_hash_no_attr(convert_ctx_t *ctx, char *name, SV *hash)
 {
     SV   *value;
@@ -612,12 +822,14 @@ XMLHash_write_hash_no_attr(convert_ctx_t *ctx, char *name, SV *hash)
     XMLHash_write_tag(ctx, TAG_CLOSE, name, ctx->opts.indent, ctx->opts.indent);
 }
 
-void
+INLINE void
 XMLHash_write_item_no_attr(convert_ctx_t *ctx, char *name, SV *value)
 {
     I32        i, len;
     int        count, raw;
     SV        *value_ref;
+    char      *str;
+    STRLEN     str_len;
 
     XMLHash_resolve_value(ctx, &value, &value_ref, &raw);
 
@@ -632,11 +844,12 @@ XMLHash_write_item_no_attr(convert_ctx_t *ctx, char *name, SV *value)
         case SVt_PV:
             /* integer, double, scalar */
             XMLHash_write_tag(ctx, TAG_OPEN, name, ctx->opts.indent, 0);
+            str = SvPV(value, str_len);
             if (raw) {
-                BUFFER_WRITE_STRING(SvPV_nolen(value));
+                BUFFER_WRITE_STRING(str, str_len);
             }
             else {
-                BUFFER_WRITE_ESCAPE(SvPV_nolen(value));
+                BUFFER_WRITE_ESCAPE(str, str_len);
             }
             XMLHash_write_tag(ctx, TAG_CLOSE, name, 0, ctx->opts.indent);
             break;
@@ -654,12 +867,13 @@ XMLHash_write_item_no_attr(convert_ctx_t *ctx, char *name, SV *value)
         case SVt_PVMG:
             /* blessed */
             if (SvOK(value)) {
+                str = SvPV(value, str_len);
                 XMLHash_write_tag(ctx, TAG_OPEN, name, ctx->opts.indent, 0);
                 if (raw) {
-                    BUFFER_WRITE_STRING(SvPV_nolen(value));
+                    BUFFER_WRITE_STRING(str, str_len);
                 }
                 else {
-                    BUFFER_WRITE_ESCAPE(SvPV_nolen(value));
+                    BUFFER_WRITE_ESCAPE(str, str_len);
                 }
                 XMLHash_write_tag(ctx, TAG_CLOSE, name, 0, ctx->opts.indent);
                 break;
@@ -671,7 +885,7 @@ XMLHash_write_item_no_attr(convert_ctx_t *ctx, char *name, SV *value)
     ctx->recursion_depth--;
 }
 
-int
+INLINE int
 XMLHash_write_item(convert_ctx_t *ctx, char *name, SV *value, int flag)
 {
     int        count = 0, raw = 0;
@@ -703,7 +917,7 @@ XMLHash_write_item(convert_ctx_t *ctx, char *name, SV *value, int flag)
             if (flag & FLAG_SIMPLE && flag & FLAG_COMPLEX) {
                 ctx->indent_count++;
                 XMLHash_write_tag(ctx, TAG_OPEN, name, ctx->opts.indent, 0);
-                BUFFER_WRITE_ESCAPE(SvPV_nolen(value));
+                BUFFER_WRITE_ESCAPE(SvPV_nolen(value), -1);
                 XMLHash_write_tag(ctx, TAG_CLOSE, name, 0, ctx->opts.indent);
                 ctx->indent_count--;
             }
@@ -742,7 +956,7 @@ XMLHash_write_item(convert_ctx_t *ctx, char *name, SV *value, int flag)
                 if (flag & FLAG_SIMPLE && flag & FLAG_COMPLEX) {
                     ctx->indent_count++;
                     XMLHash_write_tag(ctx, TAG_OPEN, name, ctx->opts.indent, 0);
-                    BUFFER_WRITE_ESCAPE(SvPV_nolen(value));
+                    BUFFER_WRITE_ESCAPE(SvPV_nolen(value), -1);
                     XMLHash_write_tag(ctx, TAG_CLOSE, name, 0, ctx->opts.indent);
                     ctx->indent_count--;
                 }
@@ -769,7 +983,7 @@ XMLHash_write_item(convert_ctx_t *ctx, char *name, SV *value, int flag)
     return count;
 }
 
-void
+INLINE void
 XMLHash_write_hash(convert_ctx_t *ctx, char *name, SV *hash)
 {
     SV   *value;
@@ -1274,7 +1488,7 @@ XMLHash_conv_parse_param(conv_opts_t *opts, int first, I32 ax, I32 items)
 }
 
 void
-XMLHash_conv_create_buffer(convert_ctx_t *ctx)
+__XMLHash_conv_create_buffer(convert_ctx_t *ctx)
 {
     xmlCharEncodingHandlerPtr encoding_handler;
 
@@ -1285,6 +1499,7 @@ XMLHash_conv_create_buffer(convert_ctx_t *ctx)
     if (ctx->opts.output == NULL) {
         /* output to string */
         ctx->buf = xmlAllocOutputBuffer(encoding_handler);
+        ctx->writer = XMLHash_writer_create(16384);
     }
     else {
         MAGIC  *mg;
@@ -1323,7 +1538,7 @@ XMLHash_conv_create_buffer(convert_ctx_t *ctx)
 }
 
 void
-XMLHash_conv_destroy_buffer(convert_ctx_t *ctx, xmlChar **result, int *len)
+__XMLHash_conv_destroy_buffer(convert_ctx_t *ctx, xmlChar **result, int *len)
 {
     if (ctx->buf == NULL) return;
 
@@ -1357,15 +1572,6 @@ XMLHash_conv_destroy_buffer(convert_ctx_t *ctx, xmlChar **result, int *len)
     (void) xmlOutputBufferClose(ctx->buf);
 
     ctx->buf = NULL;
-}
-
-int
-XMLHash_method_is_lx(char *method)
-{
-    if (strcmp(method, "LX") == 0) {
-        return 1;
-    }
-    return 0;
 }
 
 void
@@ -1428,10 +1634,8 @@ hash2xml(...)
     PREINIT:
         conv_opts_t   *conv_opts = NULL;
         convert_ctx_t  ctx;
-        SV            *p, *hash;
+        SV            *p, *hash, *result;
         int            nparam    = 0;
-        xmlChar       *result    = NULL;
-        int            len       = 0;
     CODE:
         /* get object reference */
         if (nparam >= items)
@@ -1478,7 +1682,7 @@ hash2xml(...)
         dXCPT;
         XCPT_TRY_START
         {
-            XMLHash_conv_create_buffer(&ctx);
+            ctx.writer = XMLHash_writer_create(16384);
 
             XMLHash_hash2xml(&ctx, hash);
 
@@ -1487,12 +1691,13 @@ hash2xml(...)
         XCPT_CATCH
         {
             XMLHash_stash_clean(&ctx.stash);
-            XMLHash_conv_destroy_buffer(&ctx, NULL, NULL);
+            (void) XMLHash_writer_destroy(ctx.writer);
             XCPT_RETHROW;
         }
 
         XMLHash_stash_clean(&ctx.stash);
-        XMLHash_conv_destroy_buffer(&ctx, &result, &len);
+        result = XMLHash_writer_flush(ctx.writer);
+        XMLHash_writer_destroy(ctx.writer);
 
         if (ctx.opts.output != NULL) {
             XSRETURN_UNDEF;
@@ -1503,8 +1708,7 @@ hash2xml(...)
             XSRETURN_UNDEF;
         }
         else {
-            RETVAL = newSVpvn( (const char *)result, len );
-            xmlFree(result);
+            RETVAL = result;
         }
 
     OUTPUT:

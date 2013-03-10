@@ -1,5 +1,7 @@
 #!/use/bin/perl
 
+use FindBin;
+use lib ("$FindBin::Bin/../blib/lib", "$FindBin::Bin/../blib/arch");
 use strict;
 use warnings;
 
@@ -116,7 +118,7 @@ EOT
         'escaping',
     ;
 }
-
+exit;
 {
     my $fh = tempfile();
     hash2xml( { node1 => 'value1' }, output => $fh );
