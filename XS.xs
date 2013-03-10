@@ -1383,30 +1383,17 @@ XMLHash_hash2xml(convert_ctx_t *ctx, SV *hash)
         BUFFER_WRITE_CONSTANT("?>\n");
     }
 
-    dXCPT;
-
-    XCPT_TRY_START {
-        if (ctx->opts.method == CONV_METHOD_NATIVE) {
-            ctx->opts.trim = 0;
-            XMLHash_write_hash_no_attr(ctx, ctx->opts.root, hash);
-        }
-        else if (ctx->opts.method == CONV_METHOD_NATIVE_ATTR_MODE) {
-            ctx->opts.trim = 0;
-            XMLHash_write_hash(ctx, ctx->opts.root, hash);
-        }
-        else if (ctx->opts.method == CONV_METHOD_LX) {
-            XMLHash_write_hash_lx(ctx, hash, 0);
-        }
-        XMLHash_stash_clean(&ctx->stash);
-    } XCPT_TRY_END
-
-    XCPT_CATCH
-    {
-        XMLHash_stash_clean(&ctx->stash);
-        XMLHash_conv_destroy_buffer(ctx, NULL, NULL);
-        XCPT_RETHROW;
+    if (ctx->opts.method == CONV_METHOD_NATIVE) {
+        ctx->opts.trim = 0;
+        XMLHash_write_hash_no_attr(ctx, ctx->opts.root, hash);
     }
-
+    else if (ctx->opts.method == CONV_METHOD_NATIVE_ATTR_MODE) {
+        ctx->opts.trim = 0;
+        XMLHash_write_hash(ctx, ctx->opts.root, hash);
+    }
+    else if (ctx->opts.method == CONV_METHOD_LX) {
+        XMLHash_write_hash_lx(ctx, hash, 0);
+    }
 }
 
 MODULE = XML::Hash::XS PACKAGE = XML::Hash::XS
