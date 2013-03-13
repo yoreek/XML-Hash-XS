@@ -118,7 +118,7 @@ EOT
         'escaping',
     ;
 }
-exit;
+
 {
     my $fh = tempfile();
     hash2xml( { node1 => 'value1' }, output => $fh );

@@ -5,6 +5,8 @@
 #include "ppport.h"
 
 #include <libxml/parser.h>
+#include <unicode/utypes.h>
+#include <unicode/ucnv.h>
 
 #ifndef MUTABLE_PTR
 #if defined(__GNUC__) && !defined(PERL_GCC_BRACE_GROUPS_FORBIDDEN)
@@ -126,52 +128,49 @@ typedef enum {
     CONV_METHOD_LX,
 } convMethodType;
 
-typedef int (*conv_write_callback_t)(void * context, const char * buf, int len);
-typedef int (*conv_close_callback_t)(void * context);
-
 typedef struct _conv_buffer_t conv_buffer_t;
 struct _conv_buffer_t {
-    char          *pos;
-    char          *start;
-    char          *end;
-    conv_buffer_t *prev;
+    SV                    *scalar;
+    char                  *start;
+    char                  *cur;
+    char                  *end;
 };
 
 typedef struct _conv_encoder_t conv_encoder_t;
 struct _conv_encoder_t {
+    UConverter *uconv; /* for conversion between an encoding and UTF-16 */
+    UConverter *utf8;  /* for conversion between UTF-8 and UTF-16 */
 };
 
 typedef struct _conv_writer_t conv_writer_t;
 struct _conv_writer_t {
-    conv_write_callback_t *write_callback;
-    conv_close_callback_t *close_callback;
     conv_encoder_t        *encoder;
-    SV                    *perl_buf;
-    char                  *buf;
-    char                  *buf_pos;
-    char                  *buf_end;
+    PerlIO                *perl_io;
+    SV                    *perl_obj;
+    conv_buffer_t          main_buf;
+    conv_buffer_t          enc_buf;
 };
 
 struct _conv_opts_t {
-    convMethodType            method;
+    convMethodType         method;
 
     /* native options */
-    char               version[CONV_STR_PARAM_LEN];
-    char               encoding[CONV_STR_PARAM_LEN];
-    char               root[CONV_STR_PARAM_LEN];
-    bool_t             xml_decl;
-    bool_t             canonical;
-    char               content[CONV_STR_PARAM_LEN];
-    int                indent;
-    void              *output;
+    char                   version[CONV_STR_PARAM_LEN];
+    char                   encoding[CONV_STR_PARAM_LEN];
+    char                   root[CONV_STR_PARAM_LEN];
+    bool_t                 xml_decl;
+    bool_t                 canonical;
+    char                   content[CONV_STR_PARAM_LEN];
+    int                    indent;
+    void                  *output;
 
     /* LX options */
-    char               attr[CONV_STR_PARAM_LEN];
-    int                attr_len;
-    char               text[CONV_STR_PARAM_LEN];
-    bool_t             trim;
-    char               cdata[CONV_STR_PARAM_LEN];
-    char               comm[CONV_STR_PARAM_LEN];
+    char                   attr[CONV_STR_PARAM_LEN];
+    int                    attr_len;
+    char                   text[CONV_STR_PARAM_LEN];
+    bool_t                 trim;
+    char                   cdata[CONV_STR_PARAM_LEN];
+    char                   comm[CONV_STR_PARAM_LEN];
 };
 typedef struct _conv_opts_t conv_opts_t;
 
@@ -211,23 +210,249 @@ INLINE void XMLHash_write_hash(convert_ctx_t *ctx, char *name, SV *hash);
 INLINE void XMLHash_write_hash_lx(convert_ctx_t *ctx, SV *hash, int flag);
 
 void
-XMLHash_writer_resize_buffer(conv_writer_t *writer, int add_size)
+XMLHash_encoder_conv_destroy(UConverter *uconv)
 {
-    int use  = writer->buf_pos - writer->buf;
-    int size = writer->buf_end - writer->buf;
-    if (add_size == 0 || add_size < size) {
-        add_size = size;
+    if (uconv != NULL) {
+        ucnv_close(uconv);
+    }
+}
+
+UConverter *
+XMLHash_encoder_conv_create(char *encoding, int toUnicode)
+{
+    UConverter *uconv;
+    UErrorCode  status = U_ZERO_ERROR;
+
+    uconv = ucnv_open(encoding, &status);
+    if ( U_FAILURE(status) ) {
+        return NULL;
     }
 
-    SvCUR_set(writer->perl_buf, use);
-    SvGROW(writer->perl_buf, size + add_size);
-    writer->buf       = SvPVX(writer->perl_buf);
-    writer->buf_pos   = writer->buf + use;
-    writer->buf_end   = writer->buf + size + add_size;
+    if (toUnicode) {
+        ucnv_setToUCallBack(uconv, UCNV_TO_U_CALLBACK_STOP,
+                            NULL, NULL, NULL, &status);
+    }
+    else {
+        ucnv_setFromUCallBack(uconv, UCNV_FROM_U_CALLBACK_STOP,
+                              NULL, NULL, NULL, &status);
+    }
+
+    return uconv;
+}
+
+void
+XMLHash_encoder_destroy(conv_encoder_t *encoder)
+{
+    if (encoder != NULL) {
+        XMLHash_encoder_conv_destroy(encoder->uconv);
+        XMLHash_encoder_conv_destroy(encoder->utf8);
+        free(encoder);
+    }
+}
+
+conv_encoder_t *
+XMLHash_encoder_create(char *encoding)
+{
+    conv_encoder_t *encoder;
+
+    encoder = malloc(sizeof(conv_encoder_t));
+    if (encoder == NULL) {
+        return NULL;
+    }
+    memset(encoder, 0, sizeof(conv_encoder_t));
+
+    encoder->uconv = XMLHash_encoder_conv_create(encoding, 1);
+    if (encoder->uconv == NULL) {
+        XMLHash_encoder_destroy(encoder);
+        return NULL;
+    }
+
+    encoder->utf8 = XMLHash_encoder_conv_create("UTF-8", 0);
+    if (encoder->utf8 == NULL) {
+        XMLHash_encoder_destroy(encoder);
+        return NULL;
+    }
+
+    return encoder;
+}
+
+void *
+XMLHash_writer_buffer_init(conv_buffer_t *buf, int size)
+{
+    buf->scalar = newSV(size);
+    sv_setpv(buf->scalar, "");
+
+    buf->start = buf->cur = SvPVX(buf->scalar);
+    buf->end   = buf->start + size;
+}
+
+void *
+XMLHash_writer_buffer_resize(conv_buffer_t *buf, int inc)
+{
+    int free = buf->end - buf->cur;
+    int size = buf->end - buf->start;
+    int use  = buf->cur - buf->start;
+
+    if (inc <= free) {
+        return;
+    }
+
+    size += inc < size ? size : inc;
+
+    SvCUR_set(buf->scalar, use);
+    SvGROW(buf->scalar, size);
+
+    buf->start = SvPVX(buf->scalar);
+    buf->cur   = buf->start + use;
+    buf->end   = buf->start + size;
+}
+
+INLINE void *
+XMLHash_writer_write_to_perl_obj(conv_buffer_t *buf, SV *perl_obj)
+{
+    int len = buf->cur - buf->start;
+
+    if (len > 0) {
+        *buf->cur = '\0';
+        SvCUR_set(buf->scalar, len);
+
+        dSP;
+
+        ENTER;
+        SAVETMPS;
+
+        PUSHMARK(SP);
+        EXTEND(SP, 2);
+        PUSHs((SV *) perl_obj);
+        PUSHs(buf->scalar);
+        PUTBACK;
+
+        call_method("PRINT", G_SCALAR);
+
+        FREETMPS;
+        LEAVE;
+
+        buf->cur = buf->start;
+    }
+}
+
+INLINE void *
+XMLHash_writer_write_to_perl_io(conv_buffer_t *buf, PerlIO *perl_io)
+{
+    int len = buf->cur - buf->start;
+
+    if (len > 0) {
+        *buf->cur = '\0';
+        SvCUR_set(buf->scalar, len);
+
+        PerlIO_write(perl_io, buf->start, len);
+
+        buf->cur = buf->start;
+    }
+}
+
+INLINE SV *
+XMLHash_writer_write_to_perl_scalar(conv_buffer_t *buf)
+{
+    *buf->cur = '\0';
+    SvCUR_set(buf->scalar, buf->cur - buf->start);
+
+    return buf->scalar;
+}
+
+SV *
+XMLHash_writer_flush_buffer(conv_writer_t *writer, conv_buffer_t *buf)
+{
+    if (writer->perl_obj != NULL) {
+        XMLHash_writer_write_to_perl_obj(buf, writer->perl_obj);
+        return &PL_sv_undef;
+    }
+    else if (writer->perl_io != NULL) {
+        XMLHash_writer_write_to_perl_io(buf, writer->perl_io);
+        return &PL_sv_undef;
+    }
+
+    return XMLHash_writer_write_to_perl_scalar(buf);
+}
+
+
+void
+XMLHash_writer_convert_buffer(conv_writer_t *writer, conv_buffer_t *main_buf, conv_buffer_t *enc_buf)
+{
+    int         len  = main_buf->cur - main_buf->start;
+    const char *src  = main_buf->start;
+    UErrorCode  err  = U_ZERO_ERROR;
+
+    if ((len * 4 + 1) > (enc_buf->end - enc_buf->cur)) {
+        XMLHash_writer_flush_buffer(writer, enc_buf);
+
+        XMLHash_writer_buffer_resize(enc_buf, len * 4 + 1);
+    }
+
+    ucnv_convertEx(writer->encoder->uconv, writer->encoder->utf8, &enc_buf->cur, enc_buf->end,
+                   (const char **) &src, main_buf->cur, NULL, NULL, NULL, NULL,
+                   FALSE, TRUE, &err);
+
+    if ( U_FAILURE(err) ) {
+        croak("Convert error: %d\n", err);
+    }
+}
+
+SV *
+XMLHash_writer_flush(conv_writer_t *writer)
+{
+    conv_buffer_t *buf;
+
+    if (writer->encoder != NULL) {
+        XMLHash_writer_convert_buffer(writer, &writer->main_buf, &writer->enc_buf);
+        buf = &writer->enc_buf;
+    }
+    else {
+        buf = &writer->main_buf;
+    }
+
+    return XMLHash_writer_flush_buffer(writer, buf);
+}
+
+void
+XMLHash_writer_resize_buffer(conv_writer_t *writer, int inc)
+{
+    conv_buffer_t *buf;
+
+    if (writer->encoder != NULL) {
+        XMLHash_writer_convert_buffer(writer, &writer->main_buf, &writer->enc_buf);
+        buf = &writer->enc_buf;
+    }
+    else {
+        buf = &writer->main_buf;
+    }
+
+    (void *) XMLHash_writer_flush_buffer(writer, buf);
+
+    XMLHash_writer_buffer_resize(&writer->main_buf, inc);
+}
+
+void
+XMLHash_writer_destroy(conv_writer_t *writer)
+{
+
+    if (writer != NULL) {
+        if (writer->perl_obj != NULL || writer->perl_io != NULL) {
+            SvREFCNT_dec(writer->main_buf.scalar);
+            SvREFCNT_dec(writer->enc_buf.scalar);
+        }
+        else if (writer->encoder != NULL) {
+            SvREFCNT_dec(writer->main_buf.scalar);
+        }
+
+        XMLHash_encoder_destroy(writer->encoder);
+
+        free(writer);
+    }
 }
 
 conv_writer_t *
-XMLHash_writer_create(int size)
+XMLHash_writer_create(conv_opts_t *opts, int size)
 {
     conv_writer_t *writer;
 
@@ -237,40 +462,63 @@ XMLHash_writer_create(int size)
     }
     memset(writer, 0, sizeof(conv_writer_t));
 
-    writer->perl_buf = newSV(size);
-    sv_setpv(writer->perl_buf, "");
+    XMLHash_writer_buffer_init(&writer->main_buf, size);
 
-    writer->buf      = writer->buf_pos = SvPVX(writer->perl_buf);
-    writer->buf_end  = writer->buf + size;
+    if (strcasecmp(opts->encoding, "UTF-8") != 0) {
+        writer->encoder = XMLHash_encoder_create(opts->encoding);
+        if (writer->encoder == NULL) {
+            croak("Can't create ICU converter");
+        }
+
+        XMLHash_writer_buffer_init(&writer->enc_buf, size * 4);
+    }
+
+    if (opts->output != NULL) {
+        MAGIC  *mg;
+        GV     *gv = (GV *) opts->output;
+        IO     *io = GvIO(gv);
+
+        if (io && (mg = SvTIED_mg((SV *)io, PERL_MAGIC_tiedscalar))) {
+            /* tied handle */
+            writer->perl_obj = SvTIED_obj(MUTABLE_SV(io), mg);
+        }
+        else {
+            /* simple handle */
+            writer->perl_io = IoOFP(io);
+        }
+    }
 
     return writer;
 }
 
 INLINE void
 XMLHash_writer_write(conv_writer_t *writer, const char *content, int len) {
-    if (len > (writer->buf_end - writer->buf_pos -1)) {
+    conv_buffer_t *buf = &writer->main_buf;
+
+    if (len > (buf->end - buf->cur -1)) {
         XMLHash_writer_resize_buffer(writer, len + 1);
     }
 
     if (len < 17) {
         while (len--) {
-            *writer->buf_pos++ = *content++;
+            *buf->cur++ = *content++;
         }
     }
     else {
-        memcpy(writer->buf_pos, content, len);
-        writer->buf_pos += len;
+        memcpy(buf->cur, content, len);
+        buf->cur += len;
     }
 }
 
 void
 XMLHash_writer_write_quoted_string(conv_writer_t *writer, const char *content)
 {
-    char ch;
-    const char *cur;
-    int  len = 0;
-    int  dq  = 0;
-    int  sq  = 0;
+    char           ch;
+    const char    *cur;
+    int            len = 0;
+    int            dq  = 0;
+    int            sq  = 0;
+    conv_buffer_t *buf = &writer->main_buf;
 
     cur = content;
     while ((ch = *cur++) != '\0') {
@@ -287,106 +535,107 @@ XMLHash_writer_write_quoted_string(conv_writer_t *writer, const char *content)
 
     len *= 6;
 
-    if (len > (writer->buf_end - writer->buf_pos -1)) {
+    if (len > (buf->end - buf->cur -1)) {
         XMLHash_writer_resize_buffer(writer, len + 1);
     }
 
     if (dq) {
         if (sq) {
-            *writer->buf_pos++ = '"';
+            *buf->cur++ = '"';
             while ((ch = *content++) != '\0') {
                 if (ch == '"') {
-                    *writer->buf_pos++ = '&';
-                    *writer->buf_pos++ = 'q';
-                    *writer->buf_pos++ = 'u';
-                    *writer->buf_pos++ = 'o';
-                    *writer->buf_pos++ = 't';
-                    *writer->buf_pos++ = ';';
+                    *buf->cur++ = '&';
+                    *buf->cur++ = 'q';
+                    *buf->cur++ = 'u';
+                    *buf->cur++ = 'o';
+                    *buf->cur++ = 't';
+                    *buf->cur++ = ';';
                 }
                 else {
-                    *writer->buf_pos++ = ch;
+                    *buf->cur++ = ch;
                 }
             }
-            *writer->buf_pos++ = '"';
+            *buf->cur++ = '"';
         }
         else {
-            *writer->buf_pos++ = '\'';
+            *buf->cur++ = '\'';
             while ((ch = *content++) != '\0') {
-                *writer->buf_pos++ = ch;
+                *buf->cur++ = ch;
             }
-            *writer->buf_pos++ = '\'';
+            *buf->cur++ = '\'';
         }
     }
     else {
-        *writer->buf_pos++ = '"';
+        *buf->cur++ = '"';
         while ((ch = *content++) != '\0') {
-            *writer->buf_pos++ = ch;
+            *buf->cur++ = ch;
         }
-        *writer->buf_pos++ = '"';
+        *buf->cur++ = '"';
     }
 }
 
 INLINE void
 XMLHash_writer_escape_attr(conv_writer_t *writer, const char *content)
 {
-    char ch;
-    int len = strlen(content) * 6;
+    char           ch;
+    int            len = strlen(content) * 6;
+    conv_buffer_t *buf = &writer->main_buf;
 
-    if (len > (writer->buf_end - writer->buf_pos -1)) {
+    if (len > (buf->end - buf->cur -1)) {
         XMLHash_writer_resize_buffer(writer, len + 1);
     }
 
     while ((ch = *content++) != 0) {
         switch (ch) {
             case '\n':
-                *writer->buf_pos++ = '&';
-                *writer->buf_pos++ = '#';
-                *writer->buf_pos++ = '1';
-                *writer->buf_pos++ = '0';
-                *writer->buf_pos++ = ';';
+                *buf->cur++ = '&';
+                *buf->cur++ = '#';
+                *buf->cur++ = '1';
+                *buf->cur++ = '0';
+                *buf->cur++ = ';';
                 break;
             case '\r':
-                *writer->buf_pos++ = '&';
-                *writer->buf_pos++ = '#';
-                *writer->buf_pos++ = '1';
-                *writer->buf_pos++ = '3';
-                *writer->buf_pos++ = ';';
+                *buf->cur++ = '&';
+                *buf->cur++ = '#';
+                *buf->cur++ = '1';
+                *buf->cur++ = '3';
+                *buf->cur++ = ';';
                 break;
             case '\t':
-                *writer->buf_pos++ = '&';
-                *writer->buf_pos++ = '#';
-                *writer->buf_pos++ = '9';
-                *writer->buf_pos++ = ';';
+                *buf->cur++ = '&';
+                *buf->cur++ = '#';
+                *buf->cur++ = '9';
+                *buf->cur++ = ';';
                 break;
             case '<':
-                *writer->buf_pos++ = '&';
-                *writer->buf_pos++ = 'l';
-                *writer->buf_pos++ = 't';
-                *writer->buf_pos++ = ';';
+                *buf->cur++ = '&';
+                *buf->cur++ = 'l';
+                *buf->cur++ = 't';
+                *buf->cur++ = ';';
                 break;
             case '>':
-                *writer->buf_pos++ = '&';
-                *writer->buf_pos++ = 'g';
-                *writer->buf_pos++ = 't';
-                *writer->buf_pos++ = ';';
+                *buf->cur++ = '&';
+                *buf->cur++ = 'g';
+                *buf->cur++ = 't';
+                *buf->cur++ = ';';
                 break;
             case '&':
-                *writer->buf_pos++ = '&';
-                *writer->buf_pos++ = 'a';
-                *writer->buf_pos++ = 'm';
-                *writer->buf_pos++ = 'p';
-                *writer->buf_pos++ = ';';
+                *buf->cur++ = '&';
+                *buf->cur++ = 'a';
+                *buf->cur++ = 'm';
+                *buf->cur++ = 'p';
+                *buf->cur++ = ';';
                 break;
             case '"':
-                *writer->buf_pos++ = '&';
-                *writer->buf_pos++ = 'q';
-                *writer->buf_pos++ = 'u';
-                *writer->buf_pos++ = 'o';
-                *writer->buf_pos++ = 't';
-                *writer->buf_pos++ = ';';
+                *buf->cur++ = '&';
+                *buf->cur++ = 'q';
+                *buf->cur++ = 'u';
+                *buf->cur++ = 'o';
+                *buf->cur++ = 't';
+                *buf->cur++ = ';';
                 break;
             default:
-                *writer->buf_pos++ = ch;
+                *buf->cur++ = ch;
         }
     }
 }
@@ -394,13 +643,14 @@ XMLHash_writer_escape_attr(conv_writer_t *writer, const char *content)
 INLINE void
 XMLHash_writer_escape_content(conv_writer_t *writer, const char *content, int len)
 {
-    char ch;
-    int max_len;
+    char           ch;
+    int            max_len;
+    conv_buffer_t *buf = &writer->main_buf;
 
     if (len == -1) len = strlen(content);
     max_len = len * 5;
 
-    if (max_len > (writer->buf_end - writer->buf_pos - 1)) {
+    if (max_len > (buf->end - buf->cur - 1)) {
         XMLHash_writer_resize_buffer(writer, max_len + 1);
     }
 
@@ -408,49 +658,35 @@ XMLHash_writer_escape_content(conv_writer_t *writer, const char *content, int le
         ch = *content++;
         switch (ch) {
             case '\r':
-                *writer->buf_pos++ = '&';
-                *writer->buf_pos++ = '#';
-                *writer->buf_pos++ = '1';
-                *writer->buf_pos++ = '3';
-                *writer->buf_pos++ = ';';
+                *buf->cur++ = '&';
+                *buf->cur++ = '#';
+                *buf->cur++ = '1';
+                *buf->cur++ = '3';
+                *buf->cur++ = ';';
                 break;
             case '<':
-                *writer->buf_pos++ = '&';
-                *writer->buf_pos++ = 'l';
-                *writer->buf_pos++ = 't';
-                *writer->buf_pos++ = ';';
+                *buf->cur++ = '&';
+                *buf->cur++ = 'l';
+                *buf->cur++ = 't';
+                *buf->cur++ = ';';
                 break;
             case '>':
-                *writer->buf_pos++ = '&';
-                *writer->buf_pos++ = 'g';
-                *writer->buf_pos++ = 't';
-                *writer->buf_pos++ = ';';
+                *buf->cur++ = '&';
+                *buf->cur++ = 'g';
+                *buf->cur++ = 't';
+                *buf->cur++ = ';';
                 break;
             case '&':
-                *writer->buf_pos++ = '&';
-                *writer->buf_pos++ = 'a';
-                *writer->buf_pos++ = 'm';
-                *writer->buf_pos++ = 'p';
-                *writer->buf_pos++ = ';';
+                *buf->cur++ = '&';
+                *buf->cur++ = 'a';
+                *buf->cur++ = 'm';
+                *buf->cur++ = 'p';
+                *buf->cur++ = ';';
                 break;
             default:
-                *writer->buf_pos++ = ch;
+                *buf->cur++ = ch;
         }
     }
-}
-
-SV *
-XMLHash_writer_flush(conv_writer_t *writer)
-{
-    *writer->buf_pos = '\0';
-    SvCUR_set(writer->perl_buf, writer->buf_pos - writer->buf);
-    return writer->perl_buf;
-}
-
-void
-XMLHash_writer_destroy(conv_writer_t *writer)
-{
-    free(writer);
 }
 
 static int
@@ -486,45 +722,6 @@ XMLHash_trim_string(char *s, int *len)
     *len = end - s;
 
     return s;
-}
-
-int
-XMLHash_write_handler(void *fp, char *buffer, int len)
-{
-    if ( buffer != NULL && len > 0)
-        PerlIO_write(fp, buffer, len);
-
-    return len;
-}
-
-int
-XMLHash_write_tied_handler(void *obj, char *buffer, int len)
-{
-    if ( buffer != NULL && len > 0) {
-        dSP;
-
-        ENTER;
-        SAVETMPS;
-
-        PUSHMARK(SP);
-        EXTEND(SP, 2);
-        PUSHs((SV *)obj);
-        PUSHs(sv_2mortal(newSVpv(buffer, len)));
-        PUTBACK;
-
-        call_method("PRINT", G_SCALAR);
-
-        FREETMPS;
-        LEAVE;
-    }
-
-    return len;
-}
-
-int
-XMLHash_close_handler(void *fh)
-{
-    return 1;
 }
 
 INLINE void
@@ -1488,93 +1685,6 @@ XMLHash_conv_parse_param(conv_opts_t *opts, int first, I32 ax, I32 items)
 }
 
 void
-__XMLHash_conv_create_buffer(convert_ctx_t *ctx)
-{
-    xmlCharEncodingHandlerPtr encoding_handler;
-
-    encoding_handler = xmlFindCharEncodingHandler(ctx->opts.encoding);
-    if ( encoding_handler == NULL )
-        croak("Unknown encoding");
-
-    if (ctx->opts.output == NULL) {
-        /* output to string */
-        ctx->buf = xmlAllocOutputBuffer(encoding_handler);
-        ctx->writer = XMLHash_writer_create(16384);
-    }
-    else {
-        MAGIC  *mg;
-        PerlIO *fp;
-        SV     *obj;
-        GV     *gv = (GV *) ctx->opts.output;
-        IO     *io = GvIO(gv);
-
-        xmlRegisterDefaultOutputCallbacks();
-
-        if (io && (mg = SvTIED_mg((SV *)io, PERL_MAGIC_tiedscalar))) {
-            /* tied handle */
-            obj = SvTIED_obj(MUTABLE_SV(io), mg);
-
-            ctx->buf = xmlOutputBufferCreateIO(
-                (xmlOutputWriteCallback) &XMLHash_write_tied_handler,
-                (xmlOutputCloseCallback) &XMLHash_close_handler,
-                obj, encoding_handler
-            );
-        }
-        else {
-            /* simple handle */
-            fp = IoOFP(io);
-
-            ctx->buf = xmlOutputBufferCreateIO(
-                (xmlOutputWriteCallback) &XMLHash_write_handler,
-                (xmlOutputCloseCallback) &XMLHash_close_handler,
-                fp, encoding_handler
-            );
-        }
-    }
-
-    if (ctx->buf == NULL) {
-        croak("Buffer allocation error");
-    }
-}
-
-void
-__XMLHash_conv_destroy_buffer(convert_ctx_t *ctx, xmlChar **result, int *len)
-{
-    if (ctx->buf == NULL) return;
-
-    if (ctx->opts.output == NULL) {
-        xmlOutputBufferFlush(ctx->buf);
-
-        if (result != NULL) {
-
-            if (ctx->buf->conv != NULL) {
-#ifdef LIBXML2_NEW_BUFFER
-                *len    = xmlBufUse(ctx->buf->conv);
-                *result = xmlStrndup(xmlBufContent(ctx->buf->conv), *len);
-#else
-                *len    = ctx->buf->conv->use;
-                *result = xmlStrndup(ctx->buf->conv->content, *len);
-#endif
-            }
-            else {
-#ifdef LIBXML2_NEW_BUFFER
-                *len    = xmlOutputBufferGetSize(ctx->buf);
-                *result = xmlStrndup(xmlOutputBufferGetContent(ctx->buf), *len);
-#else
-                *len    = ctx->buf->buffer->use;
-                *result = xmlStrndup(ctx->buf->buffer->content, *len);
-#endif
-            }
-        }
-
-    }
-
-    (void) xmlOutputBufferClose(ctx->buf);
-
-    ctx->buf = NULL;
-}
-
-void
 XMLHash_hash2xml(convert_ctx_t *ctx, SV *hash)
 {
     if (ctx->opts.xml_decl) {
@@ -1682,7 +1792,7 @@ hash2xml(...)
         dXCPT;
         XCPT_TRY_START
         {
-            ctx.writer = XMLHash_writer_create(16384);
+            ctx.writer = XMLHash_writer_create(&ctx.opts, 16384);
 
             XMLHash_hash2xml(&ctx, hash);
 

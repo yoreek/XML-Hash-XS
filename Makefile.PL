@@ -78,6 +78,8 @@ unless ( $is_Win32 ) { # cannot get config in W32
             try_libconfig( $xml2cfg, \%config, @blacklist );
         };
 
+		$config{LIBS} .= ' -licui18n -licuuc -licudata ';
+
         if ($@) {
             if ( not defined $config{LIBS} and not defined $config{INC} ) {
                 warn "\nusing fallback values for LIBS and INC\n";
