@@ -76,12 +76,13 @@ FUNCTIONS
 
     Compose benchmark:
 
-                       Rate        Hash    Hash::LX      Simple Hash::XS(LX)    Hash::XS
-        Hash         43.7/s          --        -12%        -38%         -98%        -98%
-        Hash::LX     49.6/s         14%          --        -30%         -97%        -98%
-        Simple       70.9/s         62%         43%          --         -96%        -96%
-        Hash::XS(LX) 1786/s       3986%       3498%       2420%           --        -11%
-        Hash::XS     2000/s       4476%       3930%       2722%          12%          --
+                        Rate    Hash Hash::LX Simple Hash::XS(LX) Hash::XS Hash::XS(OOP)
+        Hash          34.6/s      --     -10%   -38%         -99%     -99%          -99%
+        Hash::LX      38.5/s     11%       --   -31%         -98%     -99%          -99%
+        Simple        56.0/s     62%      46%     --         -98%     -98%          -98%
+        Hash::XS(LX)  2381/s   6781%    6088%  4152%           --     -33%          -36%
+        Hash::XS      3571/s  10221%    9182%  6279%          50%       --           -4%
+        Hash::XS(OOP) 3704/s  10604%    9526%  6515%          56%       4%            --
 
     Benchmark was done on <http://search.cpan.org/uploads.rdf>
 
