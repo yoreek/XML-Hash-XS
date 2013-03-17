@@ -1,5 +1,8 @@
 Revision history for XML::Hash::XS.
 
+0.15    2013-03-17
+        Using Iconv and ICU libs directly.
+
 0.14    2013-03-13
         Fixed bug allocation encoding handler
 

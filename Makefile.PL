@@ -8,231 +8,296 @@
 # Copyright 2001-2003 AxKit.com Ltd., 2002-2006 Christian Glahn, 2006-2009 Petr Pajas
 
 use 5.008008;
+use warnings;
+use strict;
+use lib qw(inc);
+use Devel::CheckLib;
 use ExtUtils::MakeMaker;
 use Config;
 use Symbol;
 use File::Spec;
 use Cwd;
 
-my (%config, $DEVNULL, $is_Win32, $DEBUG);
-
 $| = 0;
 
-$is_Win32 = ($^O =~ /Win32/);
-if ($is_Win32) {
-    $DEVNULL = 'DEVNULL';
-}
-else {
-    $DEVNULL = eval { File::Spec->devnull };
-    if ($@) { $DEVNULL = '/dev/null' }
-}
+our (%PARAMS, $DEVNULL, $is_Win32, $DEBUG, %LIBS_AVAILABLE);
 
-# common information
-my %INFO = (
+our @COMMON_LIB_PATH = (
+    '/usr/lib',
+    '/usr/local/lib',
+    '/usr/pkg/lib',
+    '/opt/local/lib',
+);
+
+our @COMMON_INC_PATH = (
+    '/usr/include',
+    '/usr/local/include',
+    '/usr/pkg/include',
+    '/opt/local/include',
+);
+
+our @REQUIRED_LIBS = (
+    {
+        name      => 'xml2',
+        mandatory => 1,
+        configs   => [
+            {
+                lib     => sub {
+                    my $results = $is_Win32 ? undef : backtick(
+                        join('/bin/', grep { $_ } ($ENV{XMLPREFIX} || $PARAMS{XMLPREFIX}, 'xml2-config')),
+                        '--libs',
+                    );
+                    $results ? [ map { substr($_, 2) } grep { $_ =~ /^-l/ } split(/\s+/, $results) ] : undef;
+                },
+                libpath => sub {
+                    my $results = $is_Win32 ? undef : backtick(
+                        join('/bin/', grep { $_ } ($ENV{XMLPREFIX} || $PARAMS{XMLPREFIX}, 'xml2-config')),
+                        '--libs',
+                    );
+                    $results ? [ map { substr($_, 2) } grep { $_ =~ /^-L/ } split(/\s+/, $results) ] : undef;
+                },
+                incpath => sub {
+                    my $results = $is_Win32 ? undef : backtick(
+                        join('/bin/', grep { $_ } ($ENV{XMLPREFIX} || $PARAMS{XMLPREFIX}, 'xml2-config')),
+                        '--cflags',
+                    );
+                    $results ? [ map { substr($_, 2) } grep { $_ =~ /^-I/ } split(/\s+/, $results) ] : undef;
+                },
+                header  => 'libxml/parser.h',
+            },
+            {
+                lib => 'xml2 m z',
+                libpath => \@COMMON_LIB_PATH,
+                incpath => [
+                    @COMMON_INC_PATH,
+                    '/usr/include/libxml2',
+                    '/usr/local/include/libxml2',
+                    '/usr/pkg/include/libxml2',
+                    '/opt/local/include/libxml2',
+                ],
+                header  => 'libxml/parser.h',
+            },
+        ],
+    },
+    {
+        name    => 'iconv',
+        configs => [
+            {
+                lib      => 'c',
+                libpath  => \@COMMON_LIB_PATH,
+                incpath  => \@COMMON_INC_PATH,
+                header   => 'iconv.h',
+                function => 'iconv_t iconv = iconv_open("UTF-8", "UTF-8");(void) iconv_close(iconv);',
+            },
+            {
+                lib      => 'iconv',
+                libpath  => \@COMMON_LIB_PATH,
+                incpath  => \@COMMON_INC_PATH,
+                header   => 'iconv.h',
+                function => 'iconv_t iconv = iconv_open("UTF-8", "UTF-8");(void) iconv_close(iconv);',
+            },
+        ],
+    },
+    {
+        name    => 'icu',
+        configs => [
+            {
+                lib     => sub {
+                    my $results = $is_Win32 ? undef : backtick('icu-config', '--ldflags-libsonly');
+                    $results ? [ map { substr($_, 2) } grep { $_ =~ /^-l/ } split(/\s+/, $results) ] : undef;
+                },
+                libpath => sub {
+                    my $results = $is_Win32 ? undef : backtick('icu-config', '--ldflags-searchpath');
+                    $results ? [ map { substr($_, 2) } grep { $_ =~ /^-L/ } split(/\s+/, $results) ] : undef;
+                },
+                incpath => sub {
+                    my $results = $is_Win32 ? undef : backtick('icu-config', '--cppflags-searchpath');
+                    $results ? [ map { substr($_, 2) } grep { $_ =~ /^-I/ } split(/\s+/, $results) ] : undef;
+                },
+                header  => [
+                    'unicode/utypes.h',
+                    'unicode/ucnv.h',
+                ],
+                function => 'UErrorCode  status = U_ZERO_ERROR;UConverter *uconv = ucnv_open("UTF-8", &status);ucnv_close(uconv);',
+            },
+            {
+                lib => 'icui18n icuuc icudata',
+                libpath => \@COMMON_LIB_PATH,
+                incpath => \@COMMON_INC_PATH,
+                header  => [
+                    'unicode/utypes.h',
+                    'unicode/ucnv.h',
+                ],
+                function => 'UErrorCode  status = U_ZERO_ERROR;UConverter *uconv = ucnv_open("UTF-8", &status);ucnv_close(uconv);',
+            },
+        ],
+    },
+);
+
+WriteMakefile(
     NAME          => 'XML::Hash::XS',
-    VERSION_FROM  => 'lib/XML/Hash/XS.pm', # finds $VERSION
-    ABSTRACT_FROM => 'lib/XML/Hash/XS.pm', # retrieve abstract from module
+    VERSION_FROM  => 'lib/XML/Hash/XS.pm',
+    ABSTRACT_FROM => 'lib/XML/Hash/XS.pm',
     AUTHOR        => 'Yuriy Ustushenko <yoreek@yahoo.com>',
     LICENSE       => "perl",
     PREREQ_PM     => {
         'Test::More'   => 0,
     },
+    get_config(),
 );
 
+sub get_config {
+    parse_params();
+
+    check_libs();
+
+    return generate_config();
+}
+
+sub generate_config {
+    return unless scalar %LIBS_AVAILABLE;
+
+    my (%config, %summary_config);
+    my @options = qw(lib libpath incpath);
+
+    foreach my $lib_config (values %LIBS_AVAILABLE) {
+        foreach my $option (@options) {
+            my $value = $lib_config->{$option} or next;
+            $value = [ split(/\s+/, $value) ] unless ref $value;
+            $config{$option}{$_} = 1 for @$value;
+        }
+    }
+
+    if ( $PARAMS{LIBS} ) {
+        $summary_config{LIBS} = [ $PARAMS{LIBS} ];
+    }
+    else {
+        my @libs = (
+            # order is important!
+            ( map { "-L$_" } keys %{ $config{libpath} || {} } ),
+            ( map {
+                $Config{cc} eq 'cl' && $_ !~ /\.lib$/ ? "-l$_.lib" : "-l$_"
+              } keys %{ $config{lib} || {} }
+            ),
+        );
+        $summary_config{LIBS} = \@libs if scalar @libs;
+    }
+
+    if ( $PARAMS{INC} ) {
+        $summary_config{INC} = [ $PARAMS{INC} ];
+    }
+    else {
+        my @inc = map { "-I$_" } keys %{ $config{incpath} || {} };
+        $summary_config{INC} = \@inc if scalar @inc;
+    }
+
+    my @define = map { "-DXMLHASH_HAVE_" . uc($_) } keys %LIBS_AVAILABLE;
+    $summary_config{DEFINE} = \@define if scalar @define;
+
+    # convert array to string
+    $summary_config{$_} = join(' ', @{ $summary_config{$_} }) for keys %summary_config;
+
+    return %summary_config;
+}
+
+sub check_libs {
+    my @options = qw(lib libpath incpath header function);
+    foreach my $info (@REQUIRED_LIBS) {
+        my $lib = $info->{name};
+        foreach my $lib_config (@{ $info->{configs} }) {
+            my %config;
+
+            @config{@options} = map {
+                my $results = $lib_config->{$_};
+                $results = ($results and ref($results) eq 'CODE') ? &$results() : $results;
+                ($results and $_ ne 'function' and !ref($results))
+                    ? [ split(/\s+/, $results) ]
+                    : $results
+                ;
+            } @options;
+
+            next unless $config{lib};
+
+            print "Checking for '$lib'... ";
+
+            delete $config{$_} for grep { !$config{$_} } keys %config;
+            if ( $PARAMS{LIBS} ) {
+                delete $config{lib};
+                delete $config{libpath};
+                $config{LIBS} = $PARAMS{LIBS};
+            }
+            if ( $PARAMS{INC} ) {
+                delete $config{incpath};
+                $config{INC} = $PARAMS{INC};
+            }
+
+            if ( check_lib(debug => $DEBUG, %config) ) {
+                print "yes\n";
+                $LIBS_AVAILABLE{$lib} = \%config;
+                last;
+            }
+
+            print "no\n";
+        }
+
+        if ($info->{mandatory} && !$LIBS_AVAILABLE{$lib}) {
+            print STDERR <<"DEATH";
+'$lib' library not found
+Try setting LIBS and INC values on the command line
+
+Also, you may try to run perl Makefile.PL with the DEBUG=1 parameter
+to see the exact reason why the detection of '$lib' installation
+failed or why Makefile.PL was not able to compile a test program.
+DEATH
+            exit 1;
+        }
+    }
+}
+
 # read extra configurations from the commandline
-{
-    my %params;
-    @params{qw(DEBUG DEFINE INC LIBS XMLPREFIX NO_THREADS LDFLAGS)}=();
+sub parse_params {
+    $is_Win32 = ($^O =~ /Win32/);
+    if ($is_Win32) {
+        $DEVNULL = 'DEVNULL';
+    }
+    else {
+        $DEVNULL = eval { File::Spec->devnull };
+        if ($@) { $DEVNULL = '/dev/null' }
+    }
+
+    @PARAMS{qw(DEBUG DEFINE INC LIBS XMLPREFIX NO_THREADS LDFLAGS)} = ();
 
     @ARGV = grep {
         my ($key, $val) = split(/=/, $_, 2);
-        if (exists $params{$key}) {
-            $config{$key} = $val; 0
+        if (exists $PARAMS{$key}) {
+            $PARAMS{$key} = $val; 0
         } else { 1 }
     } @ARGV;
 
     # switch Debugging messages on
-    $DEBUG = delete $config{DEBUG};
+    $DEBUG = delete $PARAMS{DEBUG};
 
     if ( $DEBUG and $is_Win32 ) {
         warn "win32 compile\n";
     }
 }
 
-# get the libxml2 configuration
-unless ( $is_Win32 ) { # cannot get config in W32
-    my $xml2cfg = "xml2-config";
-    my $libprefix = $ENV{XMLPREFIX} || $config{XMLPREFIX};
-
-    delete $config{XMLPREFIX}; # delete if exists, otherwise MakeMaker gets confused
-
-    if ( defined $libprefix ) {
-        $xml2cfg = $libprefix . '/bin/' . $xml2cfg;
-    }
-
-    # if a user defined INC and LIBS on the command line we must not
-    # override them
-    if ( not defined $config{LIBS} and not defined $config{INC} ) {
-        print "running xml2-config...";
-        eval {
-            try_libconfig( $xml2cfg, \%config, @blacklist );
-        };
-
-		$config{LIBS} .= ' -licui18n -licuuc -licudata ';
-
-        if ($@) {
-            if ( not defined $config{LIBS} and not defined $config{INC} ) {
-                warn "\nusing fallback values for LIBS and INC\n";
-                $config{LIBS} = '-L/usr/local/lib -L/usr/lib -L/usr/pkg/lib -L/opt/local/lib -lxml2 -lm';
-                $config{INC} = '-I/usr/include/libxml2 -I/usr/include '.
-                               '-I/usr/local/include -I/usr/local/include/libxml2 '.
-                               '-I/usr/pkg/include/libxml2 -I/usr/pkg/include '.
-                               '-I/opt/local/include/libxml2 -I/opt/local/include';
-                print <<OPT;
-options:
-  LIBS='$config{LIBS}'
-  INC='$config{INC}'
-If this is wrong, Re-run as:
-  \$ $^X Makefile.PL LIBS='-L/path/to/lib' INC='-I/path/to/include'
-
-OPT
-            }
-        }
-    }
-}
-
-# fix the ld flags
-if ($config{LIBS} !~ /\-l(?:lib)?xml2\b/) {
-    # in this case we are not able to run xml2-config. therefore we need to
-    # expand the libz as well.
-    if ($is_Win32) {
-        if( $ENV{ACTIVEPERL_MINGW} ) {
-            $config{LIBS} .= ' -llibxml2.lib -lzlib.lib';
-        } else {
-            $config{LIBS} .= ' -llibxml2 -lzlib';
-        }
-    } else {
-        $config{LIBS} .= ' -lxml2 -lz -lm';
-    }
-}
-
-if ($config{LIBS} !~ /\-lz\b/ and !($is_win32 && $config{LIBS} !~ /\-lzlib\b/)) {
-    # note if libxml2 has not -lz within its cflags, we should not use
-    # it! We should trust libxml2 and assume libz is not available on the
-    # current system (this is ofcourse not true with win32 systems.
-    # $config{LIBS} .= $is_Win32 ? ' -lzlib' :' -lz';
-    if ( $config{DEBUG} ) {
-        warn "zlib was not configured\n";
-        warn "set zlib\n" if $is_Win32;
-    }
-    if ($is_Win32) {
-        if( $ENV{ACTIVEPERL_MINGW} ) {
-            $config{LIBS} .= ' -lzlib.lib';
-        } else {
-            $config{LIBS} .= ' -lzlib';
-        }
-    } else {
-        $config{LIBS} .= ' -lz';
-    }
-}
-
-# test if the libraries are really installed!
-unless ( have_library("xml2") ) {
-    print STDERR <<DEATH;
-libxml2 not found
-Try setting LIBS and INC values on the command line
-Or get libxml2 from
-  http://xmlsoft.org/
-If you install via RPMs, make sure you also install the -devel
-RPMs, as this is where the headers (.h files) are.
-
-Also, you may try to run perl Makefile.PL with the DEBUG=1 parameter
-to see the exact reason why the detection of libxml2 installation
-failed or why Makefile.PL was not able to compile a test program.
-DEATH
-    exit 0; # 0 recommended by http://cpantest.grango.org (Notes for CPAN Authors)
-}
-
-# _NOW_ write the Makefile
-my $ldflags = delete $config{LDFLAGS};
-if ($ldflags) {
-    $config{dynamic_lib} = { OTHERLDFLAGS => " $ldflags " };
-}
-
-WriteMakefile(
-    %INFO,
-    %config,
-);
-
-
-# Functions
-#  - these should really be in MakeMaker... But &shrug;
-sub rm_f {
-    my @files = @_;
-    my @realfiles;
-    foreach (@files) {
-        push @realfiles, glob($_);
-    }
-    if (@realfiles) {
-        chmod(0777, @realfiles);
-        unlink(@realfiles);
-    }
-}
-
-sub rm_fr {
-    my @files = @_;
-    my @realfiles;
-    foreach (@files) {
-        push @realfiles, glob($_);
-    }
-    foreach my $file (@realfiles) {
-        if (-d $file) {
-            # warn("$file is a directory\n");
-            rm_fr("$file/*");
-            rm_fr("$file/.exists");
-            rmdir($file) || die "Couldn't remove $file: $!";
-        }
-        else {
-            # warn("removing $file\n");
-            chmod(0777, $file);
-            unlink($file);
-        }
-    }
-}
-
-sub xsystem {
-    my $command = shift;
-    if ($DEBUG) {
-        print $command, "\n";
-        if (system($command) != 0) {
-            die "system call to '$command' failed";
-        }
-        return 1;
-    }
-    open(OLDOUT, ">&STDOUT");
-    open(OLDERR, ">&STDERR");
-    open(STDOUT, ">$DEVNULL");
-    open(STDERR, ">$DEVNULL");
-    my $retval = system($command);
-    open(STDOUT, ">&OLDOUT");
-    open(STDERR, ">&OLDERR");
-    if ($retval != 0) {
-        die "system call to '$command' failed";
-    }
-    return 1;
-}
-
 sub backtick {
-    my $command = shift;
+    my $command = join(' ', @_);
     if ($DEBUG) {
-        print $command, "\n";
+        print "Cmd: $command \n";
         my $results = `$command`;
-        chomp $results;
         if ($? != 0) {
-            die "backticks call to '$command' failed";
+            warn "Backticks call to '$command' failed";
+            return;
         }
+        chomp $results;
         return $results;
     }
+
+    local *OLDOUT;
+    local *OLDERR;
+
     open(OLDOUT, ">&STDOUT");
     open(OLDERR, ">&STDERR");
     open(STDOUT, ">$DEVNULL");
@@ -242,157 +307,11 @@ sub backtick {
     open(STDOUT, ">&OLDOUT");
     open(STDERR, ">&OLDERR");
     if ($retval != 0) {
-        die "backticks call to '$command' failed";
+        if ($DEBUG) {
+            warn "backticks call to '$command' failed";
+        }
+        return;
     }
     chomp $results;
     return $results;
-}
-
-sub try_link0 {
-    my ($src, $opt) = @_;
-    my $cfile = gensym();
-    #local $config{LIBS};
-    #$config{LIBS} .= $opt;
-    unless (mkdir(".testlink", 0777)) {
-        rm_fr(".testlink");
-        mkdir(".testlink", 0777) || die "Cannot create .testlink dir: $!";
-    }
-    chdir(".testlink");
-    open($cfile, ">Conftest.xs") || die "Cannot write to file Conftest.xs: $!";
-print $cfile <<EOT;
-#ifdef __cplusplus
-extern "C" {
-#endif
-#include <EXTERN.h>
-#include <perl.h>
-#include <XSUB.h>
-#ifdef __cplusplus
-}
-#endif
-
-EOT
-    print $cfile $src;
-    print $cfile <<EOT;
-
-MODULE = Conftest          PACKAGE = Conftest
-
-PROTOTYPES: DISABLE
-
-EOT
-    close($cfile);
-    open($cfile, ">Conftest.pm") || die "Cannot write to file Conftest.pm: $!";
-    print $cfile <<'EOT';
-package Conftest;
-$VERSION = 1.0;
-require DynaLoader;
-@ISA = ('DynaLoader');
-bootstrap Conftest $VERSION;
-1;
-EOT
-    close($cfile);
-    open($cfile, ">Makefile.PL") || die "Cannot write to file Makefile.PL: $!";
-    print $cfile <<'EOT';
-use ExtUtils::MakeMaker;
-my %config;
-while($_ = shift @ARGV) {
-    my ($k, $v) = split /=/, $_, 2;
-    warn("$k = $v\n");
-    $config{$k} = $v;
-}
-WriteMakefile(NAME => "Conftest", VERSION_FROM => "Conftest.pm", %config);
-EOT
-    close($cfile);
-    open($cfile, ">test.pl") || die "Cannot write to file test.pl: $!";
-    print $cfile <<EOT;
-use Test; BEGIN { plan tests => 1; } END { ok(\$loaded) }
-use Conftest; \$loaded++;
-EOT
-    close($cfile);
-    my $quote = $is_Win32 ? '"' : "'";
-    xsystem("$^X Makefile.PL " . join(' ', map { "${quote}$_=$config{$_}${quote}" } keys %config));
-
-    # I am not shure if OTHERLDFLAGS is really required - at least the
-    # libraries to include do not belong here!
-    # I would assume a user to set OTHERLDFLAGS in the %config if they are
-    # really required. if done so, we don't have to pass them here ...
-    xsystem("$Config{make} test ${quote}OTHERLDFLAGS=${opt}${quote}");
-} # end try_link0
-
-sub try_link {
-    my $start_dir = cwd();
-    my $result = eval {
-        try_link0(@_);
-    };
-    warn $@ if $DEBUG && $@;
-    chdir($start_dir);
-    rm_fr(".testlink");
-    return $result;
-}
-
-sub have_library {
-    my ($lib, $func) = (@_, "blank");
-    printf("checking for %s() in -l%s... ", $func, $lib) if $func ne "blank";
-    printf("looking for -l%s... ", $lib) if $func eq "blank";
-
-    my $result;
-    if ($func) {
-        my $libs = $is_Win32 ? " $lib.lib  " : "-l$lib";
-#        my $libs = "-l$lib";
-        if ($is_Win32) {
-            $result = try_link(<<"SRC", undef);
-#include <windows.h>
-#include <winsock.h>
-#include <libxml/parser.h>
-blank() { xmlInitParser(); return 0; }
-int t() { ${func}(); return 0; }
-SRC
-            unless ($result) {
-                $result = try_link(<<"SRC", undef);
-#include <windows.h>
-#include <winsock.h>
-#include <libxml/parser.h>
-blank() { xmlInitParser(); return 0; }
-int t() { void ((*p)()); p = (void ((*)()))${func}; return 0; }
-SRC
-            }
-        }
-        else {
-            $result = try_link(<<"SRC", undef);
-#include <libxml/parser.h>
-blank() { xmlInitParser(); return 0; }
-int t() { ${func}(); return 0; }
-SRC
-        }
-    }
-
-    unless ($result) {
-        print "no\n";
-        return 0;
-    }
-
-    if ($func ne "main") {
-        $config{DEFINE} .= uc(" -Dhave_$func");
-    }
-
-    print "yes\n";
-    return 1;
-}
-
-# try_libconfig class a generic config file and requests --version, --libs and
-# --cflags
-sub try_libconfig {
-    my $cfgscript = shift;
-    my $config = shift;
-
-    my $ver = backtick("$cfgscript --version");
-    if ( defined $ver ) {
-        $config->{LIBS} = backtick("$cfgscript --libs");
-        $config->{INC}  = backtick("$cfgscript --cflags");
-
-        print "ok ($ver)\n";
-    }
-    else {
-        print "failed\n";
-        die "FAILED\n"; # strange error
-    }
 }

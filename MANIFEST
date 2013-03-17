@@ -1,5 +1,6 @@
 benchmark/benchmark.pl
 Changes
+inc/Devel/CheckLib.pm
 lib/XML/Hash/XS.pm
 LICENSE
 Makefile.PL
