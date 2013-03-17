@@ -183,6 +183,7 @@ struct _conv_opts_t {
     char                   content[CONV_STR_PARAM_LEN];
     int                    indent;
     void                  *output;
+    bool_t                 doc;
 
     /* LX options */
     char                   attr[CONV_STR_PARAM_LEN];
@@ -224,9 +225,236 @@ typedef struct {
 const char indent_string[60] = "                                                            ";
 
 INLINE void XMLHash_write_item_no_attr(convert_ctx_t *ctx, char *name, SV *value);
+INLINE void XMLHash_write_item_no_attr2doc(convert_ctx_t *ctx, char *name, SV *value, xmlNodePtr rootNode);
 INLINE int  XMLHash_write_item(convert_ctx_t *ctx, char *name, SV *value, int flag);
 INLINE void XMLHash_write_hash(convert_ctx_t *ctx, char *name, SV *hash);
 INLINE void XMLHash_write_hash_lx(convert_ctx_t *ctx, SV *hash, int flag);
+
+#define Pmm_NO_PSVI 0
+#define Pmm_PSVI_TAINTED 1
+
+struct _ProxyNode {
+    xmlNodePtr node;
+    xmlNodePtr owner;
+    int count;
+};
+
+struct _DocProxyNode {
+    xmlNodePtr node;
+    xmlNodePtr owner;
+    int count;
+    int encoding; /* only used for proxies of xmlDocPtr */
+    int psvi_status; /* see below ... */
+};
+
+/* helper type for the proxy structure */
+typedef struct _DocProxyNode DocProxyNode;
+typedef struct _ProxyNode ProxyNode;
+
+/* pointer to the proxy structure */
+typedef ProxyNode* ProxyNodePtr;
+typedef DocProxyNode* DocProxyNodePtr;
+
+/* this my go only into the header used by the xs */
+#define SvPROXYNODE(x) (INT2PTR(ProxyNodePtr,SvIV(SvRV(x))))
+#define PmmPROXYNODE(x) (INT2PTR(ProxyNodePtr,x->_private))
+#define SvNAMESPACE(x) (INT2PTR(xmlNsPtr,SvIV(SvRV(x))))
+
+#define x_PmmREFCNT(node)      node->count
+#define x_PmmREFCNT_inc(node)  node->count++
+#define x_PmmNODE(xnode)       xnode->node
+#define x_PmmOWNER(node)       node->owner
+#define x_PmmOWNERPO(node)     ((node && x_PmmOWNER(node)) ? (ProxyNodePtr)x_PmmOWNER(node)->_private : node)
+
+#define x_PmmENCODING(node)    ((DocProxyNodePtr)(node))->encoding
+#define x_PmmNodeEncoding(node) ((DocProxyNodePtr)(node->_private))->encoding
+
+#define x_SetPmmENCODING(node,code) x_PmmENCODING(node)=(code)
+#define x_SetPmmNodeEncoding(node,code) x_PmmNodeEncoding(node)=(code)
+
+#define x_PmmSvNode(n) x_PmmSvNodeExt(n,1)
+
+#define x_PmmUSEREGISTRY       (x_PROXY_NODE_REGISTRY_MUTEX != NULL)
+#define x_PmmREGISTRY          (INT2PTR(xmlHashTablePtr,SvIV(SvRV(get_sv("XML::LibXML::__PROXY_NODE_REGISTRY",0)))))
+
+ProxyNodePtr
+x_PmmNewNode(xmlNodePtr node);
+
+ProxyNodePtr
+x_PmmNewFragment(xmlDocPtr document);
+
+SV*
+x_PmmCreateDocNode( unsigned int type, ProxyNodePtr pdoc, ...);
+
+int
+x_PmmREFCNT_dec( ProxyNodePtr node );
+
+SV*
+x_PmmNodeToSv( xmlNodePtr node, ProxyNodePtr owner );
+
+SV* x_PROXY_NODE_REGISTRY_MUTEX = NULL;
+
+#ifdef XS_WARNINGS
+#define xs_warn(string) warn(string)
+#else
+#define xs_warn(string)
+#endif
+
+const char*
+x_PmmNodeTypeName( xmlNodePtr elem ){
+    const char *name = "XML::LibXML::Node";
+
+    if ( elem != NULL ) {
+        switch ( elem->type ) {
+        case XML_ELEMENT_NODE:
+            name = "XML::LibXML::Element";
+            break;
+        case XML_TEXT_NODE:
+            name = "XML::LibXML::Text";
+            break;
+        case XML_COMMENT_NODE:
+            name = "XML::LibXML::Comment";
+            break;
+        case XML_CDATA_SECTION_NODE:
+            name = "XML::LibXML::CDATASection";
+            break;
+        case XML_ATTRIBUTE_NODE:
+            name = "XML::LibXML::Attr";
+            break;
+        case XML_DOCUMENT_NODE:
+        case XML_HTML_DOCUMENT_NODE:
+            name = "XML::LibXML::Document";
+            break;
+        case XML_DOCUMENT_FRAG_NODE:
+            name = "XML::LibXML::DocumentFragment";
+            break;
+        case XML_NAMESPACE_DECL:
+            name = "XML::LibXML::Namespace";
+            break;
+        case XML_DTD_NODE:
+            name = "XML::LibXML::Dtd";
+            break;
+        case XML_PI_NODE:
+            name = "XML::LibXML::PI";
+            break;
+        default:
+            name = "XML::LibXML::Node";
+            break;
+        };
+        return name;
+    }
+    return "";
+}
+
+ProxyNodePtr
+x_PmmNewNode(xmlNodePtr node)
+{
+    ProxyNodePtr proxy = NULL;
+
+    if ( node == NULL ) {
+        xs_warn( "x_PmmNewNode: no node found\n" );
+        return NULL;
+    }
+
+    if ( node->_private == NULL ) {
+        switch ( node->type ) {
+        case XML_DOCUMENT_NODE:
+        case XML_HTML_DOCUMENT_NODE:
+        case XML_DOCB_DOCUMENT_NODE:
+            proxy = (ProxyNodePtr)xmlMalloc(sizeof(struct _DocProxyNode));
+            if (proxy != NULL) {
+                ((DocProxyNodePtr)proxy)->psvi_status = Pmm_NO_PSVI;
+                x_SetPmmENCODING(proxy, XML_CHAR_ENCODING_NONE);
+            }
+            break;
+        default:
+            proxy = (ProxyNodePtr)xmlMalloc(sizeof(struct _ProxyNode));
+            break;
+        }
+        if (proxy != NULL) {
+            proxy->node  = node;
+            proxy->owner   = NULL;
+            proxy->count   = 0;
+            node->_private = (void*) proxy;
+        }
+    }
+    else {
+        proxy = (ProxyNodePtr)node->_private;
+    }
+
+    return proxy;
+}
+
+SV*
+x_PmmNodeToSv( xmlNodePtr node, ProxyNodePtr owner )
+{
+    ProxyNodePtr dfProxy= NULL;
+    SV * retval = &PL_sv_undef;
+    const char * CLASS = "XML::LibXML::Node";
+
+    if ( node != NULL ) {
+#ifdef XML_LIBXML_THREADS
+        if( x_PmmUSEREGISTRY )
+            SvLOCK(x_PROXY_NODE_REGISTRY_MUTEX);
+#endif
+        /* find out about the class */
+        CLASS = x_PmmNodeTypeName( node );
+        xs_warn("x_PmmNodeToSv: return new perl node of class:\n");
+        xs_warn( CLASS );
+
+        if ( node->_private != NULL ) {
+            dfProxy = x_PmmNewNode(node);
+            /* warn(" at 0x%08.8X\n", dfProxy); */
+        }
+        else {
+            dfProxy = x_PmmNewNode(node);
+            /* fprintf(stderr, " at 0x%08.8X\n", dfProxy); */
+            if ( dfProxy != NULL ) {
+                if ( owner != NULL ) {
+                    dfProxy->owner = x_PmmNODE( owner );
+                    x_PmmREFCNT_inc( owner );
+                    /* fprintf(stderr, "REFCNT incremented on owner: 0x%08.8X\n", owner); */
+                }
+                else {
+                   xs_warn("x_PmmNodeToSv:   node contains itself (owner==NULL)\n");
+                }
+            }
+            else {
+                xs_warn("x_PmmNodeToSv:   proxy creation failed!\n");
+            }
+        }
+
+        retval = NEWSV(0,0);
+        sv_setref_pv( retval, CLASS, (void*)dfProxy );
+#ifdef XML_LIBXML_THREADS
+    if( x_PmmUSEREGISTRY )
+        x_PmmRegistryREFCNT_inc(dfProxy);
+#endif
+        x_PmmREFCNT_inc(dfProxy);
+        /* fprintf(stderr, "REFCNT incremented on node: 0x%08.8X\n", dfProxy); */
+
+        switch ( node->type ) {
+        case XML_DOCUMENT_NODE:
+        case XML_HTML_DOCUMENT_NODE:
+        case XML_DOCB_DOCUMENT_NODE:
+            if ( ((xmlDocPtr)node)->encoding != NULL ) {
+                x_SetPmmENCODING(dfProxy, (int)xmlParseCharEncoding( (const char*)((xmlDocPtr)node)->encoding ));
+            }
+            break;
+        default:
+            break;
+        }
+#ifdef XML_LIBXML_THREADS
+        if( x_PmmUSEREGISTRY )
+            SvUNLOCK(x_PROXY_NODE_REGISTRY_MUTEX);
+#endif
+    }
+    else {
+        xs_warn( "x_PmmNodeToSv: no node found!\n" );
+    }
+
+    return retval;
+}
 
 #ifdef XMLHASH_HAVE_ICU
 void
@@ -1140,6 +1368,116 @@ XMLHash_write_item_no_attr(convert_ctx_t *ctx, char *name, SV *value)
     ctx->recursion_depth--;
 }
 
+void
+XMLHash_write_hash_no_attr2doc(convert_ctx_t *ctx, char *name, SV *hash, xmlNodePtr rootNode)
+{
+    SV   *value;
+    HV   *hv;
+    char *key;
+    I32   keylen;
+    int   i, len;
+
+    if (!SvROK(hash)) {
+        warn("parameter is not reference\n");
+        return;
+    }
+
+    hv  = (HV *) SvRV(hash);
+    len = HvUSEDKEYS(hv);
+
+    rootNode = xmlNewChild(rootNode, NULL, BAD_CAST name, NULL);
+
+    if (len == 0) {
+        return;
+    }
+
+    hv_iterinit(hv);
+
+    if (ctx->opts.canonical) {
+        hash_entity_t a[len];
+
+        i = 0;
+        while ((value = hv_iternextsv(hv, &key, &keylen))) {
+            a[i].value = value;
+            a[i].key   = key;
+            i++;
+        }
+        len = i;
+
+        qsort(&a, len, sizeof(hash_entity_t), cmpstringp);
+
+        for (i = 0; i < len; i++) {
+            key   = a[i].key;
+            value = a[i].value;
+            XMLHash_write_item_no_attr2doc(ctx, key, value, rootNode);
+        }
+    }
+    else {
+        while ((value = hv_iternextsv(hv, &key, &keylen))) {
+            XMLHash_write_item_no_attr2doc(ctx, key, value, rootNode);
+        }
+    }
+}
+
+void
+XMLHash_write_item_no_attr2doc(convert_ctx_t *ctx, char *name, SV *value, xmlNodePtr rootNode)
+{
+    I32        i, len;
+    int        raw;
+    SV        *value_ref;
+    char      *str;
+    STRLEN     str_len;
+
+    XMLHash_resolve_value(ctx, &value, &value_ref, &raw);
+
+    switch (SvTYPE(value)) {
+        case SVt_NULL:
+            (void) xmlNewChild(rootNode, NULL, BAD_CAST name, NULL);
+            break;
+        case SVt_IV:
+        case SVt_PVIV:
+        case SVt_PVNV:
+        case SVt_NV:
+        case SVt_PV:
+            /* integer, double, scalar */
+            str = SvPV(value, str_len);
+            if (raw) {
+                (void) xmlNewChild(rootNode, NULL, BAD_CAST name, BAD_CAST str);
+            }
+            else {
+                (void) xmlNewTextChild(rootNode, NULL, BAD_CAST name, BAD_CAST str);
+            }
+            break;
+        case SVt_PVAV:
+            /* array */
+            len = av_len((AV *) value);
+            for (i = 0; i <= len; i++) {
+                XMLHash_write_item_no_attr2doc(ctx, name, *av_fetch((AV *) value, i, 0), rootNode);
+            }
+            break;
+        case SVt_PVHV:
+            /* hash */
+            XMLHash_write_hash_no_attr2doc(ctx, name, value_ref, rootNode);
+            break;
+        case SVt_PVMG:
+            /* blessed */
+            if (SvOK(value)) {
+                str = SvPV(value, str_len);
+                if (raw) {
+                    (void) xmlNewChild(rootNode, NULL, BAD_CAST name, BAD_CAST str);
+                }
+                else {
+                    (void) xmlNewTextChild(rootNode, NULL, BAD_CAST name, BAD_CAST str);
+                }
+                break;
+            }
+        default:
+            (void) xmlNewChild(rootNode, NULL, BAD_CAST name, NULL);
+    }
+
+    ctx->recursion_depth--;
+}
+
 int
 XMLHash_write_item(convert_ctx_t *ctx, char *name, SV *value, int flag)
 {
@@ -1727,6 +2065,9 @@ XMLHash_conv_parse_param(conv_opts_t *opts, int first, I32 ax, I32 items)
                 opts->output = NULL;
             }
         }
+        else if (strcmp(p, "doc") == 0) {
+            XMLHash_conv_assign_bool_param(&opts->doc, v);
+        }
         else {
             croak("Invalid parameter '%s'", p);
         }
@@ -1742,29 +2083,87 @@ XMLHash_conv_parse_param(conv_opts_t *opts, int first, I32 ax, I32 items)
     }
 }
 
-void
+INLINE SV *
 XMLHash_hash2xml(convert_ctx_t *ctx, SV *hash)
 {
-    if (ctx->opts.xml_decl) {
-        /* xml declaration */
-        BUFFER_WRITE_CONSTANT("<?xml version=");
-        BUFFER_WRITE_QUOTED(ctx->opts.version);
-        BUFFER_WRITE_CONSTANT(" encoding=");
-        BUFFER_WRITE_QUOTED(ctx->opts.encoding);
-        BUFFER_WRITE_CONSTANT("?>\n");
+    SV *result;
+
+    /* run */
+    dXCPT;
+    XCPT_TRY_START
+    {
+        ctx->writer = XMLHash_writer_create(&ctx->opts, 16384);
+
+        if (ctx->opts.xml_decl) {
+            /* xml declaration */
+            BUFFER_WRITE_CONSTANT("<?xml version=");
+            BUFFER_WRITE_QUOTED(ctx->opts.version);
+            BUFFER_WRITE_CONSTANT(" encoding=");
+            BUFFER_WRITE_QUOTED(ctx->opts.encoding);
+            BUFFER_WRITE_CONSTANT("?>\n");
+        }
+
+        if (ctx->opts.method == CONV_METHOD_NATIVE) {
+            ctx->opts.trim = 0;
+            XMLHash_write_hash_no_attr(ctx, ctx->opts.root, hash);
+        }
+        else if (ctx->opts.method == CONV_METHOD_NATIVE_ATTR_MODE) {
+            ctx->opts.trim = 0;
+            XMLHash_write_hash(ctx, ctx->opts.root, hash);
+        }
+        else if (ctx->opts.method == CONV_METHOD_LX) {
+            XMLHash_write_hash_lx(ctx, hash, 0);
+        }
+    } XCPT_TRY_END
+
+    XCPT_CATCH
+    {
+        XMLHash_stash_clean(&ctx->stash);
+        XMLHash_writer_destroy(ctx->writer);
+        XCPT_RETHROW;
     }
 
-    if (ctx->opts.method == CONV_METHOD_NATIVE) {
-        ctx->opts.trim = 0;
-        XMLHash_write_hash_no_attr(ctx, ctx->opts.root, hash);
+    XMLHash_stash_clean(&ctx->stash);
+    result = XMLHash_writer_flush(ctx->writer);
+    XMLHash_writer_destroy(ctx->writer);
+
+    return result;
+}
+
+SV *
+XMLHash_hash2dom(convert_ctx_t *ctx, SV *hash)
+{
+    xmlDocPtr doc = xmlNewDoc(BAD_CAST ctx->opts.version);
+    if (doc == NULL) {
+        croak("Can't create new document");
     }
-    else if (ctx->opts.method == CONV_METHOD_NATIVE_ATTR_MODE) {
-        ctx->opts.trim = 0;
-        XMLHash_write_hash(ctx, ctx->opts.root, hash);
+    doc->encoding = (const xmlChar*) xmlStrdup((const xmlChar*) ctx->opts.encoding);
+
+    dXCPT;
+    XCPT_TRY_START
+    {
+        if (ctx->opts.method == CONV_METHOD_NATIVE) {
+            ctx->opts.trim = 0;
+            XMLHash_write_hash_no_attr2doc(ctx, ctx->opts.root, hash, (xmlNodePtr) doc);
+        }
+        else if (ctx->opts.method == CONV_METHOD_NATIVE_ATTR_MODE) {
+            ctx->opts.trim = 0;
+            XMLHash_write_hash(ctx, ctx->opts.root, hash);
+        }
+        else if (ctx->opts.method == CONV_METHOD_LX) {
+            XMLHash_write_hash_lx(ctx, hash, 0);
+        }
+    } XCPT_TRY_END
+
+    XCPT_CATCH
+    {
+        XMLHash_stash_clean(&ctx->stash);
+        XCPT_RETHROW;
     }
-    else if (ctx->opts.method == CONV_METHOD_LX) {
-        XMLHash_write_hash_lx(ctx, hash, 0);
-    }
+
+    XMLHash_stash_clean(&ctx->stash);
+
+    return x_PmmNodeToSv((xmlNodePtr) doc, NULL);
 }
 
 MODULE = XML::Hash::XS PACKAGE = XML::Hash::XS
@@ -1847,32 +2246,19 @@ hash2xml(...)
         XMLHash_conv_parse_param(&ctx.opts, nparam, ax, items);
 
         /* run */
-        dXCPT;
-        XCPT_TRY_START
-        {
-            ctx.writer = XMLHash_writer_create(&ctx.opts, 16384);
-
-            XMLHash_hash2xml(&ctx, hash);
-
-        } XCPT_TRY_END
-
-        XCPT_CATCH
-        {
-            XMLHash_stash_clean(&ctx.stash);
-            (void) XMLHash_writer_destroy(ctx.writer);
-            XCPT_RETHROW;
+        if (ctx.opts.doc) {
+            result = XMLHash_hash2dom(&ctx, hash);
         }
-
-        XMLHash_stash_clean(&ctx.stash);
-        result = XMLHash_writer_flush(ctx.writer);
-        XMLHash_writer_destroy(ctx.writer);
+        else {
+            result = XMLHash_hash2xml(&ctx, hash);
+        }
 
         if (ctx.opts.output != NULL) {
             XSRETURN_UNDEF;
         }
 
         if (result == NULL) {
-            warn("Failed to convert doc to string");
+            warn("Failed to convert");
             XSRETURN_UNDEF;
         }
         else {
