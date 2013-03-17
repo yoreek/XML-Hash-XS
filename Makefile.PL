@@ -141,6 +141,7 @@ WriteMakefile(
     AUTHOR        => 'Yuriy Ustushenko <yoreek@yahoo.com>',
     LICENSE       => "perl",
     PREREQ_PM     => {
+        'XML::LibXML'  => 1.62,
         'Test::More'   => 0,
     },
     get_config(),
