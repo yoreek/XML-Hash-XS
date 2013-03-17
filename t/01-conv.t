@@ -9,6 +9,7 @@ use Test::More tests => 19;
 use File::Temp qw(tempfile);
 
 use XML::Hash::XS 'hash2xml';
+use XML::LibXML;
 
 our $data;
 our $xml = qq{<?xml version="1.0" encoding="utf-8"?>};
