@@ -87,6 +87,9 @@ FUNCTIONS
     Benchmark was done on <http://search.cpan.org/uploads.rdf>
 
 OPTIONS
+    doc [ => 0 ]
+        if doc is '1', then returned value is XML::LibXML::Document.
+
     root [ = 'root' ]
         Root node name.
 

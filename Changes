@@ -1,5 +1,8 @@
 Revision history for XML::Hash::XS.
 
+0.16    2013-03-19
+        New option "doc".
+
 0.15    2013-03-17
         Using Iconv and ICU libs directly.
 

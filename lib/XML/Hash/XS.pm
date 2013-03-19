@@ -8,7 +8,7 @@ use warnings;
 use base 'Exporter';
 our @EXPORT_OK = our @EXPORT = qw( hash2xml );
 
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 
 require XSLoader;
 XSLoader::load('XML::Hash::XS', $VERSION);
@@ -26,6 +26,7 @@ our $canonical = 0;
 our $use_attr  = 0;
 our $content   = undef;
 our $xml_decl  = 1;
+our $doc       = 0;
 
 # XML::Hash::LX options
 our $attr      = '-';
@@ -132,6 +133,10 @@ Benchmark was done on L<http://search.cpan.org/uploads.rdf>
 =head1 OPTIONS
 
 =over 4
+
+=item doc [ => 0 ]
+
+if doc is '1', then returned value is L<XML::LibXML::Document>.
 
 =item root [ = 'root' ]
 

@@ -12,5 +12,6 @@ t/00-load.t
 t/01-conv.t
 t/02-conv-lx.t
 t/03-oop-conv.t
+t/04-conv2doc.t
 typemap
 XS.xs

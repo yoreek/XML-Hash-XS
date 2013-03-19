@@ -4,6 +4,7 @@
 #include "XSUB.h"
 #include "ppport.h"
 
+#include <stdint.h>
 #include <libxml/parser.h>
 #ifdef XMLHASH_HAVE_ICONV
 #include <iconv.h>
@@ -43,12 +44,12 @@
 
 #define MAX_RECURSION_DEPTH             128
 
-#define BUFFER_WRITE(str, len)          XMLHash_writer_write(ctx->writer, str, len)
-#define BUFFER_WRITE_CONSTANT(str)      XMLHash_writer_write(ctx->writer, str, sizeof(str) - 1)
-#define BUFFER_WRITE_STRING(str,len)    XMLHash_writer_write(ctx->writer, str, len)
-#define BUFFER_WRITE_ESCAPE(str, len)   XMLHash_writer_escape_content(ctx->writer, str, len)
-#define BUFFER_WRITE_ESCAPE_ATTR(str)   XMLHash_writer_escape_attr(ctx->writer, str)
-#define BUFFER_WRITE_QUOTED(str)        XMLHash_writer_write_quoted_string(ctx->writer, str)
+#define BUFFER_WRITE(str, len)          XMLHash_writer_write(writer, str, len)
+#define BUFFER_WRITE_CONSTANT(str)      XMLHash_writer_write(writer, str, sizeof(str) - 1)
+#define BUFFER_WRITE_STRING(str,len)    XMLHash_writer_write(writer, str, len)
+#define BUFFER_WRITE_ESCAPE(str, len)   XMLHash_writer_escape_content(writer, str, len)
+#define BUFFER_WRITE_ESCAPE_ATTR(str)   XMLHash_writer_escape_attr(writer, str)
+#define BUFFER_WRITE_QUOTED(str)        XMLHash_writer_write_quoted_string(writer, str)
 
 #ifndef FALSE
 #define FALSE (0)
@@ -68,6 +69,7 @@
 #define CONV_DEF_USE_ATTR  FALSE
 #define CONV_DEF_CONTENT   ""
 #define CONV_DEF_XML_DECL  TRUE
+#define CONV_DEF_DOC       FALSE
 
 #define CONV_DEF_ATTR      "-"
 #define CONV_DEF_TEXT      "#text"
@@ -80,57 +82,84 @@
 #define CONV_READ_PARAM_INIT                            \
     SV   *sv;                                           \
     char *str;
-#define CONV_READ_STRING_PARAM($var, $name, $def_value) \
-    if ( (sv = get_sv($name, 0)) != NULL ) {            \
+#define CONV_READ_STRING_PARAM(var, name, def_value)    \
+    if ( (sv = get_sv(name, 0)) != NULL ) {             \
         if ( SvOK(sv) ) {                               \
             str = (char *) SvPV_nolen(sv);              \
-            strncpy($var, str, CONV_STR_PARAM_LEN);     \
+            strncpy(var, str, CONV_STR_PARAM_LEN);      \
         }                                               \
         else {                                          \
-            $var[0] = '\0';                             \
+            var[0] = '\0';                              \
         }                                               \
     }                                                   \
     else {                                              \
-        strncpy($var, $def_value, CONV_STR_PARAM_LEN);  \
+        strncpy(var, def_value, CONV_STR_PARAM_LEN);    \
     }
-#define CONV_READ_BOOL_PARAM($var, $name, $def_value)   \
-    if ( (sv = get_sv($name, 0)) != NULL ) {            \
+#define CONV_READ_BOOL_PARAM(var, name, def_value)      \
+    if ( (sv = get_sv(name, 0)) != NULL ) {             \
         if ( SvTRUE(sv) ) {                             \
-            $var = TRUE;                                \
+            var = TRUE;                                 \
         }                                               \
         else {                                          \
-            $var = FALSE;                               \
+            var = FALSE;                                \
         }                                               \
     }                                                   \
     else {                                              \
-        $var = $def_value;                              \
+        var = def_value;                                \
     }
-#define CONV_READ_INT_PARAM($var, $name, $def_value)    \
-    if ( (sv = get_sv($name, 0)) != NULL ) {            \
-        $var = SvIV(sv);                                \
+#define CONV_READ_INT_PARAM(var, name, def_value)       \
+    if ( (sv = get_sv(name, 0)) != NULL ) {             \
+        var = SvIV(sv);                                 \
     }                                                   \
     else {                                              \
-        $var = $def_value;                              \
+        var = def_value;                                \
     }
-#define CONV_READ_REF_PARAM($var, $name, $def_value)    \
-    if ( (sv = get_sv($name, 0)) != NULL ) {            \
+#define CONV_READ_REF_PARAM(var, name, def_value)       \
+    if ( (sv = get_sv(name, 0)) != NULL ) {             \
         if ( SvOK(sv) && SvROK(sv) ) {                  \
-            $var = sv;                                  \
+            var = sv;                                   \
         }                                               \
         else {                                          \
-            $var = NULL;                                \
+            var = NULL;                                 \
         }                                               \
     }                                                   \
     else {                                              \
-        $var = $def_value;                              \
+        var = def_value;                                \
     }
+
+#define str3cmp(p, c0, c1, c2)                                                \
+    *(uint32_t *) p == ((c2 << 16) | (c1 << 8) | c0)
+
+#define str4cmp(p, c0, c1, c2, c3)                                            \
+    *(uint32_t *) p == ((c3 << 24) | (c2 << 16) | (c1 << 8) | c0)
+
+#define str5cmp(p, c0, c1, c2, c3, c4)                                        \
+    *(uint32_t *) p == ((c3 << 24) | (c2 << 16) | (c1 << 8) | c0)             \
+        && p[4] == c4
+
+#define str6cmp(p, c0, c1, c2, c3, c4, c5)                                    \
+    *(uint32_t *) p == ((c3 << 24) | (c2 << 16) | (c1 << 8) | c0)             \
+        && (((uint32_t *) p)[1] & 0xffff) == ((c5 << 8) | c4)
+
+#define str7cmp(p, c0, c1, c2, c3, c4, c5, c6)                                \
+    *(uint32_t *) p == ((c3 << 24) | (c2 << 16) | (c1 << 8) | c0)             \
+        && ((uint32_t *) p)[1] == ((c6 << 16) | (c5 << 8) | c4)
+
+#define str8cmp(p, c0, c1, c2, c3, c4, c5, c6, c7)                            \
+    *(uint32_t *) p == ((c3 << 24) | (c2 << 16) | (c1 << 8) | c0)             \
+        && ((uint32_t *) p)[1] == ((c7 << 24) | (c6 << 16) | (c5 << 8) | c4)
+
+#define str9cmp(p, c0, c1, c2, c3, c4, c5, c6, c7, c8)                        \
+    *(uint32_t *) p == ((c3 << 24) | (c2 << 16) | (c1 << 8) | c0)             \
+        && ((uint32_t *) p)[1] == ((c7 << 24) | (c6 << 16) | (c5 << 8) | c4)  \
+        && p[8] == c8
 
 typedef uintptr_t bool_t;
 
 typedef enum {
-    CONV_METHOD_NATIVE,
+    CONV_METHOD_NATIVE = 0,
     CONV_METHOD_NATIVE_ATTR_MODE,
-    CONV_METHOD_LX,
+    CONV_METHOD_LX
 } convMethodType;
 
 typedef struct _conv_buffer_t conv_buffer_t;
@@ -144,7 +173,7 @@ struct _conv_buffer_t {
 #if defined(XMLHASH_HAVE_ICONV) || defined(XMLHASH_HAVE_ICU)
 typedef enum {
     ENC_ICONV,
-    ENC_ICU,
+    ENC_ICU
 } encoderType;
 
 typedef struct _conv_encoder_t conv_encoder_t;
@@ -228,9 +257,11 @@ INLINE void XMLHash_write_item_no_attr(convert_ctx_t *ctx, char *name, SV *value
 INLINE void XMLHash_write_item_no_attr2doc(convert_ctx_t *ctx, char *name, SV *value, xmlNodePtr rootNode);
 INLINE int  XMLHash_write_item(convert_ctx_t *ctx, char *name, SV *value, int flag);
 INLINE void XMLHash_write_hash(convert_ctx_t *ctx, char *name, SV *hash);
+INLINE void XMLHash_write_hash2doc(convert_ctx_t *ctx, char *name, SV *hash, xmlNodePtr rootNode);
 INLINE void XMLHash_write_hash_lx(convert_ctx_t *ctx, SV *hash, int flag);
+INLINE void XMLHash_write_hash_lx2doc(convert_ctx_t *ctx, SV *hash, int flag, xmlNodePtr rootNode);
 
-#define Pmm_NO_PSVI 0
+#define Pmm_NO_PSVI      0
 #define Pmm_PSVI_TAINTED 1
 
 struct _ProxyNode {
@@ -280,25 +311,10 @@ typedef DocProxyNode* DocProxyNodePtr;
 ProxyNodePtr
 x_PmmNewNode(xmlNodePtr node);
 
-ProxyNodePtr
-x_PmmNewFragment(xmlDocPtr document);
-
-SV*
-x_PmmCreateDocNode( unsigned int type, ProxyNodePtr pdoc, ...);
-
-int
-x_PmmREFCNT_dec( ProxyNodePtr node );
-
 SV*
 x_PmmNodeToSv( xmlNodePtr node, ProxyNodePtr owner );
 
 SV* x_PROXY_NODE_REGISTRY_MUTEX = NULL;
-
-#ifdef XS_WARNINGS
-#define xs_warn(string) warn(string)
-#else
-#define xs_warn(string)
-#endif
 
 const char*
 x_PmmNodeTypeName( xmlNodePtr elem ){
@@ -352,7 +368,6 @@ x_PmmNewNode(xmlNodePtr node)
     ProxyNodePtr proxy = NULL;
 
     if ( node == NULL ) {
-        xs_warn( "x_PmmNewNode: no node found\n" );
         return NULL;
     }
 
@@ -399,8 +414,6 @@ x_PmmNodeToSv( xmlNodePtr node, ProxyNodePtr owner )
 #endif
         /* find out about the class */
         CLASS = x_PmmNodeTypeName( node );
-        xs_warn("x_PmmNodeToSv: return new perl node of class:\n");
-        xs_warn( CLASS );
 
         if ( node->_private != NULL ) {
             dfProxy = x_PmmNewNode(node);
@@ -415,12 +428,9 @@ x_PmmNodeToSv( xmlNodePtr node, ProxyNodePtr owner )
                     x_PmmREFCNT_inc( owner );
                     /* fprintf(stderr, "REFCNT incremented on owner: 0x%08.8X\n", owner); */
                 }
-                else {
-                   xs_warn("x_PmmNodeToSv:   node contains itself (owner==NULL)\n");
-                }
             }
             else {
-                xs_warn("x_PmmNodeToSv:   proxy creation failed!\n");
+                warn("x_PmmNodeToSv:   proxy creation failed!\n");
             }
         }
 
@@ -450,7 +460,7 @@ x_PmmNodeToSv( xmlNodePtr node, ProxyNodePtr owner )
 #endif
     }
     else {
-        xs_warn( "x_PmmNodeToSv: no node found!\n" );
+        warn( "x_PmmNodeToSv: no node found!\n" );
     }
 
     return retval;
@@ -681,7 +691,7 @@ XMLHash_writer_encode_buffer(conv_writer_t *writer, conv_buffer_t *main_buf, con
 }
 #endif
 
-INLINE SV *
+SV *
 XMLHash_writer_flush(conv_writer_t *writer)
 {
     conv_buffer_t *buf;
@@ -709,7 +719,7 @@ XMLHash_writer_resize_buffer(conv_writer_t *writer, int inc)
     XMLHash_writer_buffer_resize(&writer->main_buf, inc);
 }
 
-void
+INLINE void
 XMLHash_writer_destroy(conv_writer_t *writer)
 {
     if (writer != NULL) {
@@ -730,7 +740,7 @@ XMLHash_writer_destroy(conv_writer_t *writer)
     }
 }
 
-conv_writer_t *
+INLINE conv_writer_t *
 XMLHash_writer_create(conv_opts_t *opts, int size)
 {
     conv_writer_t *writer;
@@ -1014,7 +1024,8 @@ XMLHash_trim_string(char *s, int *len)
 INLINE void
 XMLHash_write_tag(convert_ctx_t *ctx, tagType type, char *name, int indent, int lf)
 {
-    int indent_len;
+    int            indent_len;
+    conv_writer_t *writer = ctx->writer;
 
     if (name == NULL) return;
 
@@ -1049,10 +1060,55 @@ XMLHash_write_tag(convert_ctx_t *ctx, tagType type, char *name, int indent, int 
         BUFFER_WRITE_CONSTANT("\n");
 }
 
+INLINE xmlNodePtr
+XMLHash_write_tag2doc(char *name, char *content, xmlNodePtr rootNode)
+{
+    if (name == NULL) {
+        return rootNode;
+    }
+    else if (name[0] >= '1' && name[0] <= '9') {
+        int str_len = strlen(name);
+        char *tmp = malloc(str_len + 1);
+        if (tmp == NULL) {
+            croak("Memory allocation error");
+        }
+        strcpy(&tmp[1], name);
+        *tmp = '_';
+        xmlNodePtr node = xmlNewChild(rootNode, NULL, BAD_CAST name, BAD_CAST content);
+        free(tmp);
+        return node;
+    }
+
+    return xmlNewChild(rootNode, NULL, BAD_CAST name, BAD_CAST content);
+}
+
+INLINE xmlNodePtr
+XMLHash_write_tag2doc_escaped(char *name, char *content, xmlNodePtr rootNode)
+{
+    if (name == NULL) {
+        return rootNode;
+    }
+    else if (name[0] >= '1' && name[0] <= '9') {
+        int str_len = strlen(name);
+        char *tmp = malloc(str_len + 1);
+        if (tmp == NULL) {
+            croak("Memory allocation error");
+        }
+        strcpy(&tmp[1], name);
+        *tmp = '_';
+        xmlNodePtr node = xmlNewTextChild(rootNode, NULL, BAD_CAST tmp, BAD_CAST content);
+        free(tmp);
+        return node;
+    }
+
+    return xmlNewTextChild(rootNode, NULL, BAD_CAST name, BAD_CAST content);
+}
+
 INLINE void
 XMLHash_write_content(convert_ctx_t *ctx, char *value, int indent, int lf)
 {
-    int indent_len, str_len;
+    int            indent_len, str_len;
+    conv_writer_t *writer = ctx->writer;
 
     if (indent) {
         indent_len = ctx->indent_count * indent;
@@ -1075,9 +1131,24 @@ XMLHash_write_content(convert_ctx_t *ctx, char *value, int indent, int lf)
 }
 
 INLINE void
+XMLHash_write_content2doc(convert_ctx_t *ctx, char *value, xmlNodePtr rootNode)
+{
+    int str_len;
+
+    if (ctx->opts.trim) {
+        value = XMLHash_trim_string(value, &str_len);
+        xmlNodeAddContentLen(rootNode, BAD_CAST value, str_len);
+    }
+    else {
+        xmlNodeAddContent(rootNode, BAD_CAST value);
+    }
+}
+
+INLINE void
 XMLHash_write_cdata(convert_ctx_t *ctx, char *value, int indent, int lf)
 {
-    int indent_len, str_len;
+    int            indent_len, str_len;
+    conv_writer_t *writer = ctx->writer;
 
     if (indent) {
         indent_len = ctx->indent_count * indent;
@@ -1102,9 +1173,24 @@ XMLHash_write_cdata(convert_ctx_t *ctx, char *value, int indent, int lf)
 }
 
 INLINE void
+XMLHash_write_cdata2doc(convert_ctx_t *ctx, char *value, xmlNodePtr rootNode)
+{
+    int str_len;
+
+    if (ctx->opts.trim) {
+        value = XMLHash_trim_string(value, &str_len);
+        (void) xmlAddChild(rootNode, xmlNewCDataBlock(rootNode->doc, BAD_CAST value, str_len));
+    }
+    else {
+        (void) xmlAddChild(rootNode, xmlNewCDataBlock(rootNode->doc, BAD_CAST value, strlen(value)));
+    }
+}
+
+INLINE void
 XMLHash_write_comment(convert_ctx_t *ctx, char *value, int indent, int lf)
 {
-    int indent_len, str_len;
+    int            indent_len, str_len;
+    conv_writer_t *writer = ctx->writer;
 
     if (indent) {
         indent_len = ctx->indent_count * indent;
@@ -1129,9 +1215,29 @@ XMLHash_write_comment(convert_ctx_t *ctx, char *value, int indent, int lf)
 }
 
 INLINE void
+XMLHash_write_comment2doc(convert_ctx_t *ctx, char *value, xmlNodePtr rootNode)
+{
+    int str_len;
+    char ch;
+
+    if (ctx->opts.trim) {
+        value = XMLHash_trim_string(value, &str_len);
+        ch = value[str_len];
+        value[str_len] = '\0';
+        (void) xmlAddChild(rootNode, xmlNewDocComment(rootNode->doc, BAD_CAST value));
+        value[str_len] = ch;
+    }
+    else {
+        (void) xmlAddChild(rootNode, xmlNewDocComment(rootNode->doc, BAD_CAST value));
+    }
+}
+
+INLINE void
 XMLHash_write_attribute_element(convert_ctx_t *ctx, char *name, char *value)
 {
     if (name == NULL) return;
+
+    conv_writer_t *writer = ctx->writer;
 
     BUFFER_WRITE_CONSTANT(" ");
     BUFFER_WRITE_STRING(name, strlen(name));
@@ -1140,7 +1246,7 @@ XMLHash_write_attribute_element(convert_ctx_t *ctx, char *name, char *value)
     BUFFER_WRITE_CONSTANT("\"");
 }
 
-void
+INLINE void
 XMLHash_stash_push(stash_entity_t *stash, void *data)
 {
     stash_entity_t *ent;
@@ -1191,12 +1297,12 @@ XMLHash_resolve_value(convert_ctx_t *ctx, SV **value, SV **value_ref, int *raw)
                 ENTER; SAVETMPS; PUSHMARK (SP);
                 XPUSHs (sv_bless (sv_2mortal (newRV_inc (sv)), SvSTASH (sv)));
 
-                // calling with G_SCALAR ensures that we always get a 1 return value
+                /* calling with G_SCALAR ensures that we always get a 1 return value */
                 PUTBACK;
                 call_sv ((SV *)GvCV (to_string), G_SCALAR);
                 SPAGAIN;
 
-                // catch this surprisingly common error
+                /* catch this surprisingly common error */
                 if (SvROK (TOPs) && SvRV (TOPs) == sv)
                     croak("%s::toString method returned same object as was passed instead of a new one", HvNAME (SvSTASH (sv)));
 
@@ -1308,11 +1414,12 @@ XMLHash_write_hash_no_attr(convert_ctx_t *ctx, char *name, SV *hash)
 void
 XMLHash_write_item_no_attr(convert_ctx_t *ctx, char *name, SV *value)
 {
-    I32        i, len;
-    int        raw;
-    SV        *value_ref;
-    char      *str;
-    STRLEN     str_len;
+    I32            i, len;
+    int            raw;
+    SV            *value_ref = NULL;
+    char          *str;
+    STRLEN         str_len;
+    conv_writer_t *writer = ctx->writer;
 
     XMLHash_resolve_value(ctx, &value, &value_ref, &raw);
 
@@ -1385,7 +1492,7 @@ XMLHash_write_hash_no_attr2doc(convert_ctx_t *ctx, char *name, SV *hash, xmlNode
     hv  = (HV *) SvRV(hash);
     len = HvUSEDKEYS(hv);
 
-    rootNode = xmlNewChild(rootNode, NULL, BAD_CAST name, NULL);
+    rootNode = XMLHash_write_tag2doc(name, NULL, rootNode);
 
     if (len == 0) {
         return;
@@ -1424,7 +1531,7 @@ XMLHash_write_item_no_attr2doc(convert_ctx_t *ctx, char *name, SV *value, xmlNod
 {
     I32        i, len;
     int        raw;
-    SV        *value_ref;
+    SV        *value_ref = NULL;
     char      *str;
     STRLEN     str_len;
 
@@ -1432,7 +1539,7 @@ XMLHash_write_item_no_attr2doc(convert_ctx_t *ctx, char *name, SV *value, xmlNod
 
     switch (SvTYPE(value)) {
         case SVt_NULL:
-            (void) xmlNewChild(rootNode, NULL, BAD_CAST name, NULL);
+            (void) XMLHash_write_tag2doc(name, NULL, rootNode);
             break;
         case SVt_IV:
         case SVt_PVIV:
@@ -1442,10 +1549,10 @@ XMLHash_write_item_no_attr2doc(convert_ctx_t *ctx, char *name, SV *value, xmlNod
             /* integer, double, scalar */
             str = SvPV(value, str_len);
             if (raw) {
-                (void) xmlNewChild(rootNode, NULL, BAD_CAST name, BAD_CAST str);
+                (void) XMLHash_write_tag2doc(name, str, rootNode);
             }
             else {
-                (void) xmlNewTextChild(rootNode, NULL, BAD_CAST name, BAD_CAST str);
+                (void) XMLHash_write_tag2doc_escaped(name, str, rootNode);
             }
             break;
         case SVt_PVAV:
@@ -1464,15 +1571,15 @@ XMLHash_write_item_no_attr2doc(convert_ctx_t *ctx, char *name, SV *value, xmlNod
             if (SvOK(value)) {
                 str = SvPV(value, str_len);
                 if (raw) {
-                    (void) xmlNewChild(rootNode, NULL, BAD_CAST name, BAD_CAST str);
+                    (void) XMLHash_write_tag2doc(name, str, rootNode);
                 }
                 else {
-                    (void) xmlNewTextChild(rootNode, NULL, BAD_CAST name, BAD_CAST str);
+                    (void) XMLHash_write_tag2doc_escaped(name, str, rootNode);
                 }
                 break;
             }
         default:
-            (void) xmlNewChild(rootNode, NULL, BAD_CAST name, NULL);
+            (void) XMLHash_write_tag2doc(name, NULL, rootNode);
     }
 
     ctx->recursion_depth--;
@@ -1481,9 +1588,10 @@ XMLHash_write_item_no_attr2doc(convert_ctx_t *ctx, char *name, SV *value, xmlNod
 int
 XMLHash_write_item(convert_ctx_t *ctx, char *name, SV *value, int flag)
 {
-    int        count = 0, raw = 0;
-    I32        len, i;
-    SV        *value_ref;
+    int            count = 0, raw = 0;
+    I32            len, i;
+    SV            *value_ref = NULL;
+    conv_writer_t *writer = ctx->writer;
 
     if (ctx->opts.content[0] != '\0' && strcmp(name, ctx->opts.content) == 0) {
         flag = flag | FLAG_CONTENT;
@@ -1576,14 +1684,15 @@ XMLHash_write_item(convert_ctx_t *ctx, char *name, SV *value, int flag)
     return count;
 }
 
-INLINE void
+void
 XMLHash_write_hash(convert_ctx_t *ctx, char *name, SV *hash)
 {
-    SV   *value;
-    HV   *hv;
-    char *key;
-    I32   keylen;
-    int   i, done, len;
+    SV            *value;
+    HV            *hv;
+    char          *key;
+    I32            keylen;
+    int            i, done, len;
+    conv_writer_t *writer = ctx->writer;
 
     if (!SvROK(hash)) {
         warn("parameter is not reference\n");
@@ -1682,14 +1791,171 @@ XMLHash_write_hash(convert_ctx_t *ctx, char *name, SV *hash)
     }
 }
 
+int
+XMLHash_write_item2doc(convert_ctx_t *ctx, char *name, SV *value, int flag, xmlNodePtr rootNode)
+{
+    int            count = 0, raw = 0;
+    I32            len, i;
+    SV            *value_ref = NULL;
+
+    if (ctx->opts.content[0] != '\0' && strcmp(name, ctx->opts.content) == 0) {
+        flag = flag | FLAG_CONTENT;
+    }
+
+    XMLHash_resolve_value(ctx, &value, &value_ref, &raw);
+
+    switch (SvTYPE(value)) {
+        case SVt_NULL:
+            if (flag & FLAG_SIMPLE && flag & FLAG_COMPLEX) {
+                (void) xmlNewChild(rootNode, NULL, BAD_CAST name, NULL);
+            }
+            else if (flag & FLAG_SIMPLE && !(flag & FLAG_CONTENT)) {
+                xmlSetProp(rootNode, BAD_CAST name, NULL);
+                count++;
+            }
+            break;
+        case SVt_IV:
+        case SVt_PVIV:
+        case SVt_PVNV:
+        case SVt_NV:
+        case SVt_PV:
+            /* integer, double, scalar */
+            if (flag & FLAG_SIMPLE && flag & FLAG_COMPLEX) {
+                (void) xmlNewTextChild(rootNode, NULL, BAD_CAST name, BAD_CAST SvPV_nolen(value));
+            }
+            else if (flag & FLAG_COMPLEX && flag & FLAG_CONTENT) {
+                XMLHash_write_content2doc(ctx, SvPV_nolen(value), rootNode);
+            }
+            else if (flag & FLAG_SIMPLE && !(flag & FLAG_CONTENT)) {
+                (void) xmlSetProp(rootNode, BAD_CAST name, BAD_CAST SvPV_nolen(value));
+                count++;
+            }
+            break;
+        case SVt_PVAV:
+            /* array */
+            if (flag & FLAG_COMPLEX) {
+                len = av_len((AV *) value);
+                for (i = 0; i <= len; i++) {
+                    XMLHash_write_item2doc(ctx, name, *av_fetch((AV *) value, i, 0), FLAG_SIMPLE | FLAG_COMPLEX, rootNode);
+                }
+                count++;
+            }
+            break;
+        case SVt_PVHV:
+            /* hash */
+            if (flag & FLAG_COMPLEX) {
+                XMLHash_write_hash2doc(ctx, name, value_ref, rootNode);
+                count++;
+            }
+            break;
+        case SVt_PVMG:
+            /* blessed */
+            if (SvOK(value)) {
+                if (flag & FLAG_SIMPLE && flag & FLAG_COMPLEX) {
+                    (void) xmlNewTextChild(rootNode, NULL, BAD_CAST name, BAD_CAST SvPV_nolen(value));
+                }
+                else if (flag & FLAG_COMPLEX && flag & FLAG_CONTENT) {
+                    XMLHash_write_content2doc(ctx, SvPV_nolen(value), rootNode);
+                }
+                else if (flag & FLAG_SIMPLE && !(flag & FLAG_CONTENT)) {
+                    (void) xmlSetProp(rootNode, BAD_CAST name, BAD_CAST SvPV_nolen(value));
+                    count++;
+                }
+                break;
+            }
+        default:
+            if (flag & FLAG_SIMPLE && !(flag & FLAG_CONTENT)) {
+                (void) xmlSetProp(rootNode, BAD_CAST name, NULL);
+                count++;
+            }
+    }
+
+    ctx->recursion_depth--;
+
+    return count;
+}
+
+INLINE void
+XMLHash_write_hash2doc(convert_ctx_t *ctx, char *name, SV *hash, xmlNodePtr rootNode)
+{
+    SV            *value;
+    HV            *hv;
+    char          *key;
+    I32            keylen;
+    int            i, done, len;
+
+    if (!SvROK(hash)) {
+        warn("parameter is not reference\n");
+        return;
+    }
+
+    hv  = (HV *) SvRV(hash);
+    len = HvUSEDKEYS(hv);
+
+    if (len == 0) {
+        (void) xmlNewChild(rootNode, NULL, BAD_CAST name, NULL);
+        return;
+    }
+
+    rootNode = xmlNewChild(rootNode, NULL, BAD_CAST name, NULL);
+
+    hv_iterinit(hv);
+
+    if (ctx->opts.canonical) {
+        hash_entity_t a[len];
+
+        i = 0;
+        while ((value = hv_iternextsv(hv, &key, &keylen))) {
+            a[i].value = value;
+            a[i].key   = key;
+            i++;
+        }
+        len = i;
+
+        qsort(&a, len, sizeof(hash_entity_t), cmpstringp);
+
+        done = 0;
+        for (i = 0; i < len; i++) {
+            key   = a[i].key;
+            value = a[i].value;
+            done += XMLHash_write_item2doc(ctx, key, value, FLAG_SIMPLE, rootNode);
+        }
+
+        if (done != len) {
+            for (i = 0; i < len; i++) {
+                key   = a[i].key;
+                value = a[i].value;
+                XMLHash_write_item2doc(ctx, key, value, FLAG_COMPLEX, rootNode);
+            }
+        }
+    }
+    else {
+        done = 0;
+        len  = 0;
+
+        while ((value = hv_iternextsv(hv, &key, &keylen))) {
+            done += XMLHash_write_item2doc(ctx, key, value, FLAG_SIMPLE, rootNode);
+            len++;
+        }
+
+        if (done != len) {
+            while ((value = hv_iternextsv(hv, &key, &keylen))) {
+                XMLHash_write_item2doc(ctx, key, value, FLAG_COMPLEX, rootNode);
+            }
+        }
+    }
+}
+
 void
 XMLHash_write_hash_lx(convert_ctx_t *ctx, SV *value, int flag)
 {
-    SV   *value_ref, *hash_value, *hash_value_ref;
-    HV   *hv;
-    char *key;
-    I32   keylen;
-    int   len, i, raw = 0;
+    SV            *value_ref = NULL;
+    SV            *hash_value, *hash_value_ref;
+    HV            *hv;
+    char          *key;
+    I32            keylen;
+    int            len, i, raw = 0;
+    conv_writer_t *writer = ctx->writer;
 
     XMLHash_resolve_value(ctx, &value, &value_ref, &raw);
 
@@ -1874,6 +2140,187 @@ XMLHash_write_hash_lx(convert_ctx_t *ctx, SV *value, int flag)
 }
 
 void
+XMLHash_write_hash_lx2doc(convert_ctx_t *ctx, SV *value, int flag, xmlNodePtr rootNode)
+{
+    SV            *value_ref = NULL;
+    SV            *hash_value, *hash_value_ref;
+    HV            *hv;
+    char          *key;
+    I32            keylen;
+    int            len, i, raw = 0;
+    xmlNodePtr     node;
+
+    XMLHash_resolve_value(ctx, &value, &value_ref, &raw);
+
+    switch (SvTYPE(value)) {
+        case SVt_NULL:
+            XMLHash_write_content2doc(ctx, "", rootNode);
+            break;
+        case SVt_IV:
+        case SVt_PVIV:
+        case SVt_PVNV:
+        case SVt_NV:
+        case SVt_PV:
+            if (flag & FLAG_ATTR_ONLY) break;
+            XMLHash_write_content2doc(ctx, SvPV_nolen(value), rootNode);
+            break;
+        case SVt_PVAV:
+            len = av_len((AV *) value);
+            for (i = 0; i <= len; i++) {
+                XMLHash_write_hash_lx2doc(ctx, *av_fetch((AV *) value, i, 0), flag, rootNode);
+            }
+            break;
+        case SVt_PVHV:
+            hv  = (HV *) value;
+            len = HvUSEDKEYS(hv);
+            hv_iterinit(hv);
+
+            while ((hash_value = hv_iternextsv(hv, &key, &keylen))) {
+                if (ctx->opts.cdata[0] != '\0' && strcmp(key, ctx->opts.cdata) == 0) {
+                    if (flag & FLAG_ATTR_ONLY) continue;
+                    XMLHash_resolve_value(ctx, &hash_value, &hash_value_ref, &raw);
+                    switch (SvTYPE(hash_value)) {
+                        case SVt_NULL:
+                            break;
+                        case SVt_IV:
+                        case SVt_PVIV:
+                        case SVt_PVNV:
+                        case SVt_NV:
+                        case SVt_PV:
+                            XMLHash_write_cdata2doc(ctx, SvPV_nolen(hash_value), rootNode);
+                            break;
+                        case SVt_PVAV:
+                        case SVt_PVHV:
+                            break;
+                        case SVt_PVMG:
+                            if (SvOK(value)) {
+                                XMLHash_write_cdata2doc(ctx, SvPV_nolen(hash_value), rootNode);
+                                break;
+                            }
+                        default:
+                            XMLHash_write_cdata2doc(ctx, SvPV_nolen(hash_value), rootNode);
+                    }
+                }
+                else if (ctx->opts.text[0] != '\0' && strcmp(key, ctx->opts.text) == 0) {
+                    if (flag & FLAG_ATTR_ONLY) continue;
+                    XMLHash_resolve_value(ctx, &hash_value, &hash_value_ref, &raw);
+                    switch (SvTYPE(hash_value)) {
+                        case SVt_NULL:
+                            XMLHash_write_content2doc(ctx, "", rootNode);
+                            break;
+                        case SVt_IV:
+                        case SVt_PVIV:
+                        case SVt_PVNV:
+                        case SVt_NV:
+                        case SVt_PV:
+                            XMLHash_write_content2doc(ctx, SvPV_nolen(hash_value), rootNode);
+                            break;
+                        case SVt_PVAV:
+                        case SVt_PVHV:
+                            break;
+                        case SVt_PVMG:
+                            if (SvOK(value)) {
+                                XMLHash_write_content2doc(ctx, SvPV_nolen(hash_value), rootNode);
+                                break;
+                            }
+                        default:
+                            XMLHash_write_content2doc(ctx, SvPV_nolen(hash_value), rootNode);
+                    }
+                }
+                else if (ctx->opts.comm[0] != '\0' && strcmp(key, ctx->opts.comm) == 0) {
+                    if (flag & FLAG_ATTR_ONLY) continue;
+                    XMLHash_resolve_value(ctx, &hash_value, &hash_value_ref, &raw);
+                    switch (SvTYPE(hash_value)) {
+                        case SVt_NULL:
+                            XMLHash_write_comment2doc(ctx, "", rootNode);
+                            break;
+                        case SVt_IV:
+                        case SVt_PVIV:
+                        case SVt_PVNV:
+                        case SVt_NV:
+                        case SVt_PV:
+                            XMLHash_write_comment2doc(ctx, SvPV_nolen(hash_value), rootNode);
+                            break;
+                        case SVt_PVAV:
+                        case SVt_PVHV:
+                            break;
+                        case SVt_PVMG:
+                            if (SvOK(value)) {
+                                XMLHash_write_comment2doc(ctx, SvPV_nolen(hash_value), rootNode);
+                                break;
+                            }
+                        default:
+                            XMLHash_write_comment2doc(ctx, SvPV_nolen(hash_value), rootNode);
+                    }
+                }
+                else if (ctx->opts.attr[0] != '\0') {
+                    if (strncmp(key, ctx->opts.attr, ctx->opts.attr_len) == 0) {
+                        if (!(flag & FLAG_ATTR_ONLY)) continue;
+                        key += ctx->opts.attr_len;
+                        XMLHash_resolve_value(ctx, &hash_value, &hash_value_ref, &raw);
+                        switch (SvTYPE(hash_value)) {
+                            case SVt_NULL:
+                                xmlSetProp(rootNode, BAD_CAST key, BAD_CAST "");
+                                break;
+                            case SVt_IV:
+                            case SVt_PVIV:
+                            case SVt_PVNV:
+                            case SVt_NV:
+                            case SVt_PV:
+                                xmlSetProp(rootNode, BAD_CAST key, BAD_CAST SvPV_nolen(hash_value));
+                                break;
+                            case SVt_PVAV:
+                            case SVt_PVHV:
+                                break;
+                            case SVt_PVMG:
+                                if (SvOK(value)) {
+                                    xmlSetProp(rootNode, BAD_CAST key, BAD_CAST SvPV_nolen(hash_value));
+                                    break;
+                                }
+                            default:
+                                xmlSetProp(rootNode, BAD_CAST key, BAD_CAST SvPV_nolen(hash_value));
+                        }
+                    }
+                    else {
+                        if (flag & FLAG_ATTR_ONLY) continue;
+                        if (SvTYPE(hash_value) == SVt_NULL) {
+                            (void) xmlNewTextChild(rootNode, NULL, BAD_CAST key, BAD_CAST "");
+                        }
+                        else {
+                            node = xmlNewTextChild(rootNode, NULL, BAD_CAST key, BAD_CAST "");
+                            XMLHash_write_hash_lx2doc(ctx, hash_value, FLAG_ATTR_ONLY, node);
+                            XMLHash_write_hash_lx2doc(ctx, hash_value, 0, node);
+                        }
+                    }
+                }
+                else {
+                    if (SvTYPE(hash_value) == SVt_NULL) {
+                        (void) xmlNewTextChild(rootNode, NULL, BAD_CAST key, BAD_CAST "");
+                    }
+                    else {
+                        node = xmlNewTextChild(rootNode, NULL, BAD_CAST key, BAD_CAST "");
+                        XMLHash_write_hash_lx2doc(ctx, hash_value, 0, node);
+                    }
+                }
+            }
+
+            break;
+        case SVt_PVMG:
+            /* blessed */
+            if (flag & FLAG_ATTR_ONLY) break;
+            if (SvOK(value)) {
+                XMLHash_write_content2doc(ctx, SvPV_nolen(value), rootNode);
+                break;
+            }
+        default:
+            if (flag & FLAG_ATTR_ONLY) break;
+            XMLHash_write_content2doc(ctx, SvPV_nolen(value), rootNode);
+    }
+
+    ctx->recursion_depth--;
+}
+
+void
 XMLHash_conv_destroy(conv_opts_t *conv_opts)
 {
     if (conv_opts != NULL) {
@@ -1897,6 +2344,7 @@ XMLHash_conv_init_options(conv_opts_t *opts)
     CONV_READ_BOOL_PARAM  (opts->canonical, "XML::Hash::XS::canonical", CONV_DEF_CANONICAL);
     CONV_READ_STRING_PARAM(opts->content,   "XML::Hash::XS::content",   CONV_DEF_CONTENT);
     CONV_READ_BOOL_PARAM  (opts->xml_decl,  "XML::Hash::XS::xml_decl",  CONV_DEF_XML_DECL);
+    CONV_READ_BOOL_PARAM  (opts->doc,       "XML::Hash::XS::doc",       CONV_DEF_DOC);
     CONV_READ_BOOL_PARAM  (use_attr,        "XML::Hash::XS::use_attr",  CONV_DEF_USE_ATTR);
 
     /* XML::Hash::LX options */
@@ -1966,110 +2414,148 @@ XMLHash_conv_assign_int_param(char *name, int *param, SV *value)
     *param = SvIV(value);
 }
 
-void
-XMLHash_conv_assign_bool_param(bool_t *param, SV *value)
+bool_t
+XMLHash_conv_assign_bool_param(SV *value)
 {
-    if ( SvTRUE(value) )
-        *param = TRUE;
-    else
-        *param = FALSE;
+    if ( SvTRUE(value) ) {
+        return TRUE;
+    }
+    return FALSE;
 }
 
 void
 XMLHash_conv_parse_param(conv_opts_t *opts, int first, I32 ax, I32 items)
 {
-    int      i;
-    char    *p, *cv;
-    SV      *v;
-    bool_t   use_attr = -1;
-
-    if (first >= items) return;
-
     if ((items - first) % 2 != 0) {
         croak("Odd number of parameters in new()");
     }
 
+    int      i;
+    char    *p, *cv;
+    SV      *v;
+    STRLEN   len;
+    bool_t   use_attr = -1;
+
     for (i = first; i < items; i = i + 2) {
-        if (!SvOK(ST(i))) {
+        v = ST(i);
+        if (!SvOK(v)) {
             croak("Parameter name is undefined");
         }
 
-        p = (char *) SvPV(ST(i), PL_na);
+        p = (char *) SvPV(v, len);
         v = ST(i + 1);
 
-        if (strcmp(p, "method") == 0) {
-            if (!SvOK(v)) {
-                croak("Parameter '%s' is undefined", p);
-            }
-            cv = SvPV_nolen(v);
-            if (strcmp(cv, "NATIVE") == 0) {
-                opts->method = CONV_METHOD_NATIVE;
-            }
-            else if (strcmp(cv, "LX") == 0) {
-                opts->method = CONV_METHOD_LX;
-            }
-            else {
-                croak("Invalid parameter value for '%s': %s", p, cv);
-            }
-        }
-        else if (strcmp(p, "root") == 0) {
-            XMLHash_conv_assign_string_param(opts->root, v);
-        }
-        else if (strcmp(p, "version") == 0) {
-            XMLHash_conv_assign_string_param(opts->version, v);
-        }
-        else if (strcmp(p, "encoding") == 0) {
-            XMLHash_conv_assign_string_param(opts->encoding, v);
-        }
-        else if (strcmp(p, "content") == 0) {
-            XMLHash_conv_assign_string_param(opts->content, v);
-        }
-        else if (strcmp(p, "xml_decl") == 0) {
-            XMLHash_conv_assign_bool_param(&opts->xml_decl, v);
-        }
-        else if (strcmp(p, "use_attr") == 0) {
-            XMLHash_conv_assign_bool_param(&use_attr, v);
-        }
-        else if (strcmp(p, "canonical") == 0) {
-            XMLHash_conv_assign_bool_param(&opts->canonical, v);
-        }
-        else if (strcmp(p, "indent") == 0) {
-            XMLHash_conv_assign_int_param(p, &opts->indent, v);
-        }
-        else if (strcmp(p, "attr") == 0) {
-            XMLHash_conv_assign_string_param(opts->attr, v);
-            if (opts->attr[0] == '\0') {
-                opts->attr_len = 0;
-            }
-            else {
-                opts->attr_len = strlen(opts->attr);
-            }
-        }
-        else if (strcmp(p, "trim") == 0) {
-            XMLHash_conv_assign_bool_param(&opts->trim, v);
-        }
-        else if (strcmp(p, "text") == 0) {
-            XMLHash_conv_assign_string_param(opts->text, v);
-        }
-        else if (strcmp(p, "cdata") == 0) {
-            XMLHash_conv_assign_string_param(opts->cdata, v);
-        }
-        else if (strcmp(p, "comm") == 0) {
-            XMLHash_conv_assign_string_param(opts->comm, v);
-        }
-        else if (strcmp(p, "output") == 0) {
-            if ( SvOK(v) && SvROK(v) ) {
-                opts->output = SvRV(v);
-            }
-            else {
-                opts->output = NULL;
-            }
-        }
-        else if (strcmp(p, "doc") == 0) {
-            XMLHash_conv_assign_bool_param(&opts->doc, v);
-        }
-        else {
-            croak("Invalid parameter '%s'", p);
+        switch (len) {
+            case 3:
+                if (str3cmp(p, 'd', 'o', 'c')) {
+                    opts->doc = XMLHash_conv_assign_bool_param(v);
+                    break;
+                }
+                goto error;
+            case 4:
+                if (str4cmp(p, 'a', 't', 't', 'r')) {
+                    XMLHash_conv_assign_string_param(opts->attr, v);
+                    if (opts->attr[0] == '\0') {
+                        opts->attr_len = 0;
+                    }
+                    else {
+                        opts->attr_len = strlen(opts->attr);
+                    }
+                    break;
+                }
+                if (str4cmp(p, 'c', 'o', 'm', 'm')) {
+                    XMLHash_conv_assign_string_param(opts->comm, v);
+                    break;
+                }
+                if (str4cmp(p, 'r', 'o', 'o', 't')) {
+                    XMLHash_conv_assign_string_param(opts->root, v);
+                    break;
+                }
+                if (str4cmp(p, 't', 'r', 'i', 'm')) {
+                    opts->trim = XMLHash_conv_assign_bool_param(v);
+                    break;
+                }
+                if (str4cmp(p, 't', 'e', 'x', 't')) {
+                    XMLHash_conv_assign_string_param(opts->text, v);
+                    break;
+                }
+                goto error;
+            case 5:
+                if (str5cmp(p, 'c', 'd', 'a', 't', 'a')) {
+                    XMLHash_conv_assign_string_param(opts->cdata, v);
+                    break;
+                }
+                goto error;
+            case 6:
+                if (str6cmp(p, 'i', 'n', 'd', 'e', 'n', 't')) {
+                    XMLHash_conv_assign_int_param(p, &opts->indent, v);
+                    break;
+                }
+                if (str6cmp(p, 'm', 'e', 't', 'h', 'o', 'd')) {
+                    if (!SvOK(v)) {
+                        croak("Parameter '%s' is undefined", p);
+                    }
+                    cv = SvPV(v, len);
+                    switch  (len) {
+                        case 6:
+                            if (str6cmp(cv, 'N', 'A', 'T', 'I', 'V', 'E')) {
+                                opts->method = CONV_METHOD_NATIVE;
+                                break;
+                            }
+                            goto error_value;
+                        case 2:
+                            if (cv[0] == 'L' && cv[1] == 'X') {
+                                opts->method = CONV_METHOD_LX;
+                                break;
+                            }
+                            goto error_value;
+                        default:
+                            goto error_value;
+                    }
+                    break;
+                }
+                if (str6cmp(p, 'o', 'u', 't', 'p', 'u', 't')) {
+                    if ( SvOK(v) && SvROK(v) ) {
+                        opts->output = SvRV(v);
+                    }
+                    else {
+                        opts->output = NULL;
+                    }
+                    break;
+                }
+                goto error;
+            case 7:
+                if (str7cmp(p, 'c', 'o', 'n', 't', 'e', 'n', 't')) {
+                    XMLHash_conv_assign_string_param(opts->content, v);
+                    break;
+                }
+                if (str7cmp(p, 'v', 'e', 'r', 's', 'i', 'o', 'n')) {
+                    XMLHash_conv_assign_string_param(opts->version, v);
+                    break;
+                }
+                goto error;
+            case 8:
+                if (str8cmp(p, 'e', 'n', 'c', 'o', 'd', 'i', 'n', 'g')) {
+                    XMLHash_conv_assign_string_param(opts->encoding, v);
+                    break;
+                }
+                if (str8cmp(p, 'u', 's', 'e', '_', 'a', 't', 't', 'r')) {
+                    use_attr = XMLHash_conv_assign_bool_param(v);
+                    break;
+                }
+                if (str8cmp(p, 'x', 'm', 'l', '_', 'd', 'e', 'c', 'l')) {
+                    opts->xml_decl = XMLHash_conv_assign_bool_param(v);
+                    break;
+                }
+                goto error;
+            case 9:
+                if (str9cmp(p, 'c', 'a', 'n', 'o', 'n', 'i', 'c', 'a', 'l')) {
+                    opts->canonical = XMLHash_conv_assign_bool_param(v);
+                    break;
+                }
+                goto error;
+            default:
+                goto error;
         }
     }
 
@@ -2081,18 +2567,28 @@ XMLHash_conv_parse_param(conv_opts_t *opts, int first, I32 ax, I32 items)
             opts->method = CONV_METHOD_NATIVE;
         }
     }
+
+    return;
+
+error_value:
+    croak("Invalid parameter value for '%s': %s", p, cv);
+    return;
+
+error:
+    croak("Invalid parameter '%s'", p);
 }
 
-INLINE SV *
+SV *
 XMLHash_hash2xml(convert_ctx_t *ctx, SV *hash)
 {
-    SV *result;
+    SV            *result;
+    conv_writer_t *writer = NULL;
 
     /* run */
     dXCPT;
     XCPT_TRY_START
     {
-        ctx->writer = XMLHash_writer_create(&ctx->opts, 16384);
+        ctx->writer = writer = XMLHash_writer_create(&ctx->opts, 16384);
 
         if (ctx->opts.xml_decl) {
             /* xml declaration */
@@ -2103,29 +2599,33 @@ XMLHash_hash2xml(convert_ctx_t *ctx, SV *hash)
             BUFFER_WRITE_CONSTANT("?>\n");
         }
 
-        if (ctx->opts.method == CONV_METHOD_NATIVE) {
-            ctx->opts.trim = 0;
-            XMLHash_write_hash_no_attr(ctx, ctx->opts.root, hash);
-        }
-        else if (ctx->opts.method == CONV_METHOD_NATIVE_ATTR_MODE) {
-            ctx->opts.trim = 0;
-            XMLHash_write_hash(ctx, ctx->opts.root, hash);
-        }
-        else if (ctx->opts.method == CONV_METHOD_LX) {
-            XMLHash_write_hash_lx(ctx, hash, 0);
+        switch (ctx->opts.method) {
+            case CONV_METHOD_NATIVE:
+                ctx->opts.trim = 0;
+                XMLHash_write_hash_no_attr(ctx, ctx->opts.root, hash);
+                break;
+            case CONV_METHOD_NATIVE_ATTR_MODE:
+                ctx->opts.trim = 0;
+                XMLHash_write_hash(ctx, ctx->opts.root, hash);
+                break;
+            case CONV_METHOD_LX:
+                XMLHash_write_hash_lx(ctx, hash, 0);
+                break;
+            default:
+                croak("Invalid method");
         }
     } XCPT_TRY_END
 
     XCPT_CATCH
     {
         XMLHash_stash_clean(&ctx->stash);
-        XMLHash_writer_destroy(ctx->writer);
+        XMLHash_writer_destroy(writer);
         XCPT_RETHROW;
     }
 
     XMLHash_stash_clean(&ctx->stash);
-    result = XMLHash_writer_flush(ctx->writer);
-    XMLHash_writer_destroy(ctx->writer);
+    result = XMLHash_writer_flush(writer);
+    XMLHash_writer_destroy(writer);
 
     return result;
 }
@@ -2142,16 +2642,20 @@ XMLHash_hash2dom(convert_ctx_t *ctx, SV *hash)
     dXCPT;
     XCPT_TRY_START
     {
-        if (ctx->opts.method == CONV_METHOD_NATIVE) {
-            ctx->opts.trim = 0;
-            XMLHash_write_hash_no_attr2doc(ctx, ctx->opts.root, hash, (xmlNodePtr) doc);
-        }
-        else if (ctx->opts.method == CONV_METHOD_NATIVE_ATTR_MODE) {
-            ctx->opts.trim = 0;
-            XMLHash_write_hash(ctx, ctx->opts.root, hash);
-        }
-        else if (ctx->opts.method == CONV_METHOD_LX) {
-            XMLHash_write_hash_lx(ctx, hash, 0);
+        switch (ctx->opts.method) {
+            case CONV_METHOD_NATIVE:
+                ctx->opts.trim = 0;
+                XMLHash_write_hash_no_attr2doc(ctx, ctx->opts.root, hash, (xmlNodePtr) doc);
+                break;
+            case CONV_METHOD_NATIVE_ATTR_MODE:
+                ctx->opts.trim = 0;
+                XMLHash_write_hash2doc(ctx, ctx->opts.root, hash, (xmlNodePtr) doc);
+                break;
+            case CONV_METHOD_LX:
+                XMLHash_write_hash_lx2doc(ctx, hash, 0, (xmlNodePtr) doc);
+                break;
+            default:
+                croak("Invalid method");
         }
     } XCPT_TRY_END
 
@@ -2171,8 +2675,7 @@ MODULE = XML::Hash::XS PACKAGE = XML::Hash::XS
 PROTOTYPES: DISABLE
 
 conv_opts_t *
-new(class = "XML::Hash::XS",...)
-        char *class;
+new(CLASS,...)
     PREINIT:
         conv_opts_t  *conv_opts;
     CODE:
@@ -2243,7 +2746,9 @@ hash2xml(...)
             /* read options from object */
             memcpy(&ctx.opts, conv_opts, sizeof(conv_opts_t));
         }
-        XMLHash_conv_parse_param(&ctx.opts, nparam, ax, items);
+        if (nparam < items) {
+            XMLHash_conv_parse_param(&ctx.opts, nparam, ax, items);
+        }
 
         /* run */
         if (ctx.opts.doc) {
@@ -2261,9 +2766,8 @@ hash2xml(...)
             warn("Failed to convert");
             XSRETURN_UNDEF;
         }
-        else {
-            RETVAL = result;
-        }
+
+        RETVAL = result;
 
     OUTPUT:
         RETVAL
