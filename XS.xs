@@ -1326,8 +1326,8 @@ XMLHash_resolve_value(convert_ctx_t *ctx, SV **value, SV **value_ref, int *raw)
 
             dSP;
 
-            ENTER;
-            SAVETMPS;
+            ENTER; SAVETMPS; PUSHMARK (SP);
+
             count = call_sv(*value, G_SCALAR|G_NOARGS);
 
             SPAGAIN;

@@ -1,5 +1,8 @@
 Revision history for XML::Hash::XS.
 
+0.17    2013-03-22
+        Fixed bug with invalid stack pointer.
+
 0.16    2013-03-19
         New option "doc".
 
