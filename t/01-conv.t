@@ -103,9 +103,13 @@ EOT
     ;
 }
 
-{
+SKIP: {
+    eval { $data = hash2xml( { node1 => 'Тест' }, encoding => 'cp1251' ) };
+    my $err = $@;
+    chomp $err;
+    skip $err, 1 if $err;
     is
-        $data = hash2xml( { node1 => 'Тест' }, encoding => 'cp1251' ),
+        $data,
         qq{<?xml version="1.0" encoding="cp1251"?>\n<root><node1>\322\345\361\362</node1></root>},
         'encoding support',
     ;

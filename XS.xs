@@ -505,7 +505,9 @@ XMLHash_encoder_destroy(conv_encoder_t *encoder)
 {
     if (encoder != NULL) {
 #ifdef XMLHASH_HAVE_ICONV
-        iconv_close(encoder->iconv);
+        if (encoder->iconv != NULL) {
+            iconv_close(encoder->iconv);
+        }
 #endif
 
 #ifdef XMLHASH_HAVE_ICU

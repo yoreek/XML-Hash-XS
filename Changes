@@ -1,5 +1,9 @@
 Revision history for XML::Hash::XS.
 
+0.18    2013-04-14
+        Fixbug: segmentation fault.
+        Fixbug: skip test if encoding is not supported.
+
 0.17    2013-03-22
         Fixed bug with invalid stack pointer.
 
