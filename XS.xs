@@ -1243,9 +1243,14 @@ XMLHash_write_attribute_element(convert_ctx_t *ctx, char *name, char *value)
 
     BUFFER_WRITE_CONSTANT(" ");
     BUFFER_WRITE_STRING(name, strlen(name));
-    BUFFER_WRITE_CONSTANT("=\"");
-    BUFFER_WRITE_ESCAPE_ATTR(value);
-    BUFFER_WRITE_CONSTANT("\"");
+    if (value == NULL) {
+        BUFFER_WRITE_CONSTANT("=\"\"");
+    }
+    else {
+        BUFFER_WRITE_CONSTANT("=\"");
+        BUFFER_WRITE_ESCAPE_ATTR(value);
+        BUFFER_WRITE_CONSTANT("\"");
+    }
 }
 
 INLINE void
@@ -2069,7 +2074,7 @@ XMLHash_write_hash_lx(convert_ctx_t *ctx, SV *value, int flag)
                         XMLHash_resolve_value(ctx, &hash_value, &hash_value_ref, &raw);
                         switch (SvTYPE(hash_value)) {
                             case SVt_NULL:
-                                XMLHash_write_attribute_element(ctx, key, (char *) "");
+                                XMLHash_write_attribute_element(ctx, key, NULL);
                                 break;
                             case SVt_IV:
                             case SVt_PVIV:
@@ -2627,6 +2632,9 @@ XMLHash_hash2xml(convert_ctx_t *ctx, SV *hash)
 
     XMLHash_stash_clean(&ctx->stash);
     result = XMLHash_writer_flush(writer);
+    if (result != NULL && writer->encoder == NULL) {
+        SvUTF8_on(result);
+    }
     XMLHash_writer_destroy(writer);
 
     return result;

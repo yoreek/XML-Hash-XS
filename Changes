@@ -1,5 +1,9 @@
 Revision history for XML::Hash::XS.
 
+0.19    2013-07-08
+        Fixbug: segmentation fault when value=undef and use_attr=1.
+        Fixbug: set utf8 flag for result string.
+
 0.18    2013-04-14
         Fixbug: segmentation fault.
         Fixbug: skip test if encoding is not supported.
