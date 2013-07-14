@@ -135,15 +135,17 @@ our @REQUIRED_LIBS = (
 );
 
 WriteMakefile(
-    NAME          => 'XML::Hash::XS',
-    VERSION_FROM  => 'lib/XML/Hash/XS.pm',
-    ABSTRACT_FROM => 'lib/XML/Hash/XS.pm',
-    AUTHOR        => 'Yuriy Ustushenko <yoreek@yahoo.com>',
-    LICENSE       => "perl",
-    PREREQ_PM     => {
+    NAME             => 'XML::Hash::XS',
+    VERSION_FROM     => 'lib/XML/Hash/XS.pm',
+    ABSTRACT_FROM    => 'lib/XML/Hash/XS.pm',
+    AUTHOR           => 'Yuriy Ustushenko <yoreek@yahoo.com>',
+    LICENSE          => "perl",
+    MIN_PERL_VERSION => 5.008008,
+    PREREQ_PM        => {
         'XML::LibXML'  => 1.62,
         'Test::More'   => 0,
     },
+    OBJECT           => 'XS.o xmlhash_writer.o xmlhash_converter.o xmlhash_converter_doc.o',
     get_config(),
 );
 

@@ -5,7 +5,7 @@ use lib ("$FindBin::Bin/../blib/lib", "$FindBin::Bin/../blib/arch");
 use strict;
 use warnings;
 
-use Test::More tests => 9;
+use Test::More tests => 12;
 
 use XML::Hash::XS 'hash2xml';
 
@@ -63,9 +63,30 @@ our $data;
 }
 {
 	is
-		$data = hash2xml( { node => { -attr => undef, '#cdata' => undef, '/' => undef, x=>undef } }, cdata => '#cdata', comm => '/' ),
-		qq{$xml<node attr=""><!----><x/></node>},
+		$data = hash2xml( { node => { -attr => undef } } ),
+		qq{$xml<node attr=""></node>},
 		'empty attr',
+	;
+}
+{
+	is
+		$data = hash2xml( { node => { '#cdata' => undef } }, cdata => '#cdata' ),
+		qq{$xml<node></node>},
+		'empty cdata',
+	;
+}
+{
+	is
+		$data = hash2xml( { node => { '/' => undef } }, comm => '/' ),
+		qq{$xml<node><!----></node>},
+		'empty comment',
+	;
+}
+{
+	is
+		$data = hash2xml( { node => { x=>undef } } ),
+		qq{$xml<node><x/></node>},
+		'empty tag',
 	;
 }
 {
