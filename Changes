@@ -1,6 +1,6 @@
 Revision history for XML::Hash::XS.
 
-0.20    2013-07-13
+0.20    2013-07-14
         Fixbug: conv_writer_t has no member named encoder
         Fixbug: test 02-conv-lx.t
 
