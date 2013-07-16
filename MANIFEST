@@ -14,4 +14,14 @@ t/02-conv-lx.t
 t/03-oop-conv.t
 t/04-conv2doc.t
 typemap
+xmlhash_common.h
+xmlhash_converter.c
+xmlhash_converter.h
+xmlhash_converter_doc.c
+xmlhash_converter_doc.h
+xmlhash_converter_lx.h
+xmlhash_converter_native.h
+xmlhash_converter_no_attr.h
+xmlhash_writer.c
+xmlhash_writer.h
 XS.xs
