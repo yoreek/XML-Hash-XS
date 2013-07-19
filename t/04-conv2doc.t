@@ -5,18 +5,26 @@ use lib ("$FindBin::Bin/../blib/lib", "$FindBin::Bin/../blib/arch");
 use strict;
 use warnings;
 
-use Test::More tests => 9;
+use Test::More;
 use File::Temp qw(tempfile);
 
-use XML::Hash::XS 'hash2xml';
+use XML::Hash::XS;
 use XML::LibXML;
 
-$XML::Hash::XS::doc = 1;
+our $c;
+eval { $c = XML::Hash::XS->new(doc => 1) };
+if ($@) {
+    plan skip_all => "Option 'doc' is not supported";
+}
+else {
+    plan tests => 9;
+}
+
 our $data;
 our $xml = qq{<?xml version="1.0" encoding="utf-8"?>};
 
 {
-    $data = hash2xml( { node1 => [ 'value1', { node2 => 'value2' } ] } )->toString();
+    $data = $c->hash2xml( { node1 => [ 'value1', { node2 => 'value2' } ] } )->toString();
     chomp $data;
     is
         $data,
@@ -26,7 +34,7 @@ our $xml = qq{<?xml version="1.0" encoding="utf-8"?>};
 }
 
 {
-    $data = hash2xml( { node3 => 'value3', node1 => 'value1', node2 => 'value2' }, canonical => 1 )->toString();
+    $data = $c->hash2xml( { node3 => 'value3', node1 => 'value1', node2 => 'value2' }, canonical => 1 )->toString();
     chomp $data;
     is
         $data,
@@ -36,7 +44,7 @@ our $xml = qq{<?xml version="1.0" encoding="utf-8"?>};
 }
 
 {
-    $data = hash2xml( { node1 => [ 1, '2', '2' + 1 ] } )->toString();
+    $data = $c->hash2xml( { node1 => [ 1, '2', '2' + 1 ] } )->toString();
     chomp $data;
     is
         $data,
@@ -48,7 +56,7 @@ our $xml = qq{<?xml version="1.0" encoding="utf-8"?>};
 {
     my $x = 1.1;
     my $y = '2.2';
-    $data = hash2xml( { node1 => [ $x, $y, $y + $x ] } )->toString();
+    $data = $c->hash2xml( { node1 => [ $x, $y, $y + $x ] } )->toString();
     chomp $data;
     is
         $data,
@@ -58,7 +66,7 @@ our $xml = qq{<?xml version="1.0" encoding="utf-8"?>};
 }
 
 {
-    $data = hash2xml( { 1 => 'value1' } )->toString();
+    $data = $c->hash2xml( { 1 => 'value1' } )->toString();
     chomp $data;
     is
         $data,
@@ -67,9 +75,11 @@ our $xml = qq{<?xml version="1.0" encoding="utf-8"?>};
     ;
 }
 
-{
-    $data = hash2xml( { node1 => 'Тест' }, encoding => 'cp1251' )->toString();
-    chomp $data;
+SKIP: {
+    eval { $data = $c->hash2xml( { node1 => 'Тест' }, encoding => 'cp1251' )->toString(); chomp $data; };
+    my $err = $@;
+    chomp $err;
+    skip $err, 1 if $err;
     is
         $data,
         qq{<?xml version="1.0" encoding="cp1251"?>\n<root><node1>\322\345\361\362</node1></root>},
@@ -78,7 +88,7 @@ our $xml = qq{<?xml version="1.0" encoding="utf-8"?>};
 }
 
 {
-    $data = hash2xml( { node1 => '&<>' } )->toString();
+    $data = $c->hash2xml( { node1 => '&<>' } )->toString();
     chomp $data;
     is
         $data,
@@ -88,7 +98,7 @@ our $xml = qq{<?xml version="1.0" encoding="utf-8"?>};
 }
 
 {
-    $data = hash2xml(
+    $data = $c->hash2xml(
         {
             node1 => 'value1"',
             node2 => 'value2&',
@@ -113,7 +123,7 @@ EOT
 }
 
 {
-    $data = hash2xml(
+    $data = $c->hash2xml(
         {
             content => 'content&1',
             node2   => [ 21, { node22 => 'value23', 'content' => 'content2' } ],

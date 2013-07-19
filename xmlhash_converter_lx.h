@@ -4,7 +4,9 @@
 #include "xmlhash_converter.h"
 
 INLINE void XMLHash_write_hash_lx(convert_ctx_t *ctx, SV *hash, int flag);
+#if defined(XMLHASH_HAVE_XML2) && defined(XMLHASH_HAVE_XML__LIBXML)
 INLINE void XMLHash_write_hash_lx2doc(convert_ctx_t *ctx, SV *hash, int flag, xmlNodePtr rootNode);
+#endif
 
 INLINE void
 XMLHash_write_hash_lx(convert_ctx_t *ctx, SV *value, int flag)
@@ -199,6 +201,7 @@ XMLHash_write_hash_lx(convert_ctx_t *ctx, SV *value, int flag)
     ctx->recursion_depth--;
 }
 
+#if defined(XMLHASH_HAVE_XML2) && defined(XMLHASH_HAVE_XML__LIBXML)
 INLINE void
 XMLHash_write_hash_lx2doc(convert_ctx_t *ctx, SV *value, int flag, xmlNodePtr rootNode)
 {
@@ -379,5 +382,6 @@ XMLHash_write_hash_lx2doc(convert_ctx_t *ctx, SV *value, int flag, xmlNodePtr ro
 
     ctx->recursion_depth--;
 }
+#endif
 
 #endif

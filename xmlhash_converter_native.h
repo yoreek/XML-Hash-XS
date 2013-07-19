@@ -5,7 +5,9 @@
 
 INLINE int XMLHash_write_item(convert_ctx_t *ctx, char *name, SV *value, int flag);
 INLINE void XMLHash_write_hash(convert_ctx_t *ctx, char *name, SV *hash);
+#if defined(XMLHASH_HAVE_XML2) && defined(XMLHASH_HAVE_XML__LIBXML)
 INLINE void XMLHash_write_hash2doc(convert_ctx_t *ctx, char *name, SV *hash, xmlNodePtr rootNode);
+#endif
 
 INLINE int
 XMLHash_write_item(convert_ctx_t *ctx, char *name, SV *value, int flag)
@@ -213,6 +215,7 @@ XMLHash_write_hash(convert_ctx_t *ctx, char *name, SV *hash)
     }
 }
 
+#if defined(XMLHASH_HAVE_XML2) && defined(XMLHASH_HAVE_XML__LIBXML)
 int
 XMLHash_write_item2doc(convert_ctx_t *ctx, char *name, SV *value, int flag, xmlNodePtr rootNode)
 {
@@ -367,5 +370,6 @@ XMLHash_write_hash2doc(convert_ctx_t *ctx, char *name, SV *hash, xmlNodePtr root
         }
     }
 }
+#endif
 
 #endif

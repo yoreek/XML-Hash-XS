@@ -11,7 +11,9 @@
 #define CONV_DEF_USE_ATTR  FALSE
 #define CONV_DEF_CONTENT   ""
 #define CONV_DEF_XML_DECL  TRUE
+#if defined(XMLHASH_HAVE_XML2) && defined(XMLHASH_HAVE_XML__LIBXML)
 #define CONV_DEF_DOC       FALSE
+#endif
 
 #define CONV_DEF_ATTR      "-"
 #define CONV_DEF_TEXT      "#text"
@@ -91,7 +93,9 @@ XMLHash_conv_init_options(conv_opts_t *opts)
     CONV_READ_BOOL_PARAM  (opts->canonical, "XML::Hash::XS::canonical", CONV_DEF_CANONICAL);
     CONV_READ_STRING_PARAM(opts->content,   "XML::Hash::XS::content",   CONV_DEF_CONTENT);
     CONV_READ_BOOL_PARAM  (opts->xml_decl,  "XML::Hash::XS::xml_decl",  CONV_DEF_XML_DECL);
+#if defined(XMLHASH_HAVE_XML2) && defined(XMLHASH_HAVE_XML__LIBXML)
     CONV_READ_BOOL_PARAM  (opts->doc,       "XML::Hash::XS::doc",       CONV_DEF_DOC);
+#endif
     CONV_READ_BOOL_PARAM  (use_attr,        "XML::Hash::XS::use_attr",  CONV_DEF_USE_ATTR);
 
     /* XML::Hash::LX options */
@@ -193,12 +197,14 @@ XMLHash_conv_parse_param(conv_opts_t *opts, int first, I32 ax, I32 items)
         v = ST(i + 1);
 
         switch (len) {
+#if defined(XMLHASH_HAVE_XML2) && defined(XMLHASH_HAVE_XML__LIBXML)
             case 3:
                 if (str3cmp(p, 'd', 'o', 'c')) {
                     opts->doc = XMLHash_conv_assign_bool_param(v);
                     break;
                 }
                 goto error;
+#endif
             case 4:
                 if (str4cmp(p, 'a', 't', 't', 'r')) {
                     XMLHash_conv_assign_string_param(opts->attr, v);
@@ -406,12 +412,16 @@ hash2xml(...)
         }
 
         /* run */
+#if defined(XMLHASH_HAVE_XML2) && defined(XMLHASH_HAVE_XML__LIBXML)
         if (ctx.opts.doc) {
             result = XMLHash_hash2dom(&ctx, hash);
         }
         else {
             result = XMLHash_hash2xml(&ctx, hash);
         }
+#else
+        result = XMLHash_hash2xml(&ctx, hash);
+#endif
 
         if (ctx.opts.output != NULL) {
             XSRETURN_UNDEF;

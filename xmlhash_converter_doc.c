@@ -1,6 +1,7 @@
 #include "xmlhash_common.h"
 #include "xmlhash_converter_doc.h"
 
+#if defined(XMLHASH_HAVE_XML2) && defined(XMLHASH_HAVE_XML__LIBXML)
 SV* x_PROXY_NODE_REGISTRY_MUTEX = NULL;
 
 static const char*
@@ -152,3 +153,4 @@ x_PmmNodeToSv(xmlNodePtr node, ProxyNodePtr owner)
 
     return retval;
 }
+#endif

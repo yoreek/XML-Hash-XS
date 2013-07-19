@@ -38,8 +38,14 @@ our @COMMON_INC_PATH = (
 
 our @REQUIRED_LIBS = (
     {
+        perl      => 1,
+        name      => 'XML::LibXML',
+        version   => 1.62,
+        mandatory => 0,
+    },
+    {
         name      => 'xml2',
-        mandatory => 1,
+        mandatory => 0,
         configs   => [
             {
                 lib     => sub {
@@ -66,7 +72,7 @@ our @REQUIRED_LIBS = (
                 header  => 'libxml/parser.h',
             },
             {
-                lib => 'xml2 m z',
+                lib     => 'xml2 m z',
                 libpath => \@COMMON_LIB_PATH,
                 incpath => [
                     @COMMON_INC_PATH,
@@ -142,7 +148,6 @@ WriteMakefile(
     LICENSE          => "perl",
     MIN_PERL_VERSION => 5.008008,
     PREREQ_PM        => {
-        'XML::LibXML'  => 1.62,
         'Test::More'   => 0,
     },
     OBJECT           => 'XS.o xmlhash_writer.o xmlhash_converter.o xmlhash_converter_doc.o',
@@ -194,7 +199,7 @@ sub generate_config {
         $summary_config{INC} = \@inc if scalar @inc;
     }
 
-    my @define = map { "-DXMLHASH_HAVE_" . uc($_) } keys %LIBS_AVAILABLE;
+    my @define = map { s/:/_/g; "-DXMLHASH_HAVE_" . uc($_) } keys %LIBS_AVAILABLE;
     $summary_config{DEFINE} = \@define if scalar @define;
 
     # convert array to string
@@ -207,40 +212,56 @@ sub check_libs {
     my @options = qw(lib libpath incpath header function);
     foreach my $info (@REQUIRED_LIBS) {
         my $lib = $info->{name};
-        foreach my $lib_config (@{ $info->{configs} }) {
-            my %config;
 
-            @config{@options} = map {
-                my $results = $lib_config->{$_};
-                $results = ($results and ref($results) eq 'CODE') ? &$results() : $results;
-                ($results and $_ ne 'function' and !ref($results))
-                    ? [ split(/\s+/, $results) ]
-                    : $results
-                ;
-            } @options;
-
-            next unless $config{lib};
-
+        if ( $info->{perl} ) {
+            my $ver = $info->{version} || '';
             print "Checking for '$lib'... ";
-
-            delete $config{$_} for grep { !$config{$_} } keys %config;
-            if ( $PARAMS{LIBS} ) {
-                delete $config{lib};
-                delete $config{libpath};
-                $config{LIBS} = $PARAMS{LIBS};
+            eval "use $lib $ver";
+            if (my $err = $@) {
+                print "no\n";
+                print $err if $DEBUG
             }
-            if ( $PARAMS{INC} ) {
-                delete $config{incpath};
-                $config{INC} = $PARAMS{INC};
-            }
-
-            if ( check_lib(debug => $DEBUG, %config) ) {
+            else {
                 print "yes\n";
-                $LIBS_AVAILABLE{$lib} = \%config;
-                last;
+                $LIBS_AVAILABLE{$lib} = {};
             }
+        }
+        else {
+            foreach my $lib_config (@{ $info->{configs} }) {
+                my %config;
 
-            print "no\n";
+                @config{@options} = map {
+                    my $results = $lib_config->{$_};
+                    $results = ($results and ref($results) eq 'CODE') ? &$results() : $results;
+                    ($results and $_ ne 'function' and !ref($results))
+                        ? [ split(/\s+/, $results) ]
+                        : $results
+                    ;
+                } @options;
+
+                next unless $config{lib} || $config{perl_lib};
+
+                print "Checking for '$lib'... ";
+
+                delete $config{$_} for grep { !$config{$_} } keys %config;
+                if ( $PARAMS{LIBS} ) {
+                    delete $config{lib};
+                    delete $config{libpath};
+                    $config{LIBS} = $PARAMS{LIBS};
+                }
+                if ( $PARAMS{INC} ) {
+                    delete $config{incpath};
+                    $config{INC} = $PARAMS{INC};
+                }
+
+                if ( check_lib(debug => $DEBUG, %config) ) {
+                    print "yes\n";
+                    $LIBS_AVAILABLE{$lib} = \%config;
+                    last;
+                }
+
+                print "no\n";
+            }
         }
 
         if ($info->{mandatory} && !$LIBS_AVAILABLE{$lib}) {

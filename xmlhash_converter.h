@@ -32,7 +32,9 @@ struct _conv_opts_t {
     char                   content[CONV_STR_PARAM_LEN];
     int                    indent;
     void                  *output;
+#if defined(XMLHASH_HAVE_XML2) && defined(XMLHASH_HAVE_XML__LIBXML)
     bool_t                 doc;
+#endif
 
     /* LX options */
     char                   attr[CONV_STR_PARAM_LEN];
@@ -309,6 +311,8 @@ XMLHash_write_attribute_element(convert_ctx_t *ctx, char *name, char *value)
 
 int XMLHash_cmpstring(const void *p1, const void *p2);
 SV *XMLHash_hash2xml(convert_ctx_t *ctx, SV *hash);
+#if defined(XMLHASH_HAVE_XML2) && defined(XMLHASH_HAVE_XML__LIBXML)
 SV *XMLHash_hash2dom(convert_ctx_t *ctx, SV *hash);
+#endif
 
 #endif

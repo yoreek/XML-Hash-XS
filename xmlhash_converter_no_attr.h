@@ -4,9 +4,11 @@
 #include "xmlhash_converter.h"
 
 INLINE void XMLHash_write_item_no_attr(convert_ctx_t *ctx, char *name, SV *value);
-INLINE void XMLHash_write_item_no_attr2doc(convert_ctx_t *ctx, char *name, SV *value, xmlNodePtr rootNode);
 INLINE void XMLHash_write_hash_no_attr(convert_ctx_t *ctx, char *name, SV *hash);
+#if defined(XMLHASH_HAVE_XML2) && defined(XMLHASH_HAVE_XML__LIBXML)
+INLINE void XMLHash_write_item_no_attr2doc(convert_ctx_t *ctx, char *name, SV *value, xmlNodePtr rootNode);
 INLINE void XMLHash_write_hash_no_attr2doc(convert_ctx_t *ctx, char *name, SV *hash, xmlNodePtr rootNode);
+#endif
 
 INLINE void
 XMLHash_write_hash_no_attr(convert_ctx_t *ctx, char *name, SV *hash)
@@ -130,6 +132,7 @@ XMLHash_write_item_no_attr(convert_ctx_t *ctx, char *name, SV *value)
     ctx->recursion_depth--;
 }
 
+#if defined(XMLHASH_HAVE_XML2) && defined(XMLHASH_HAVE_XML__LIBXML)
 INLINE void
 XMLHash_write_hash_no_attr2doc(convert_ctx_t *ctx, char *name, SV *hash, xmlNodePtr rootNode)
 {
@@ -239,5 +242,6 @@ XMLHash_write_item_no_attr2doc(convert_ctx_t *ctx, char *name, SV *value, xmlNod
 
     ctx->recursion_depth--;
 }
+#endif
 
 #endif

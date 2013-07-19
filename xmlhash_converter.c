@@ -90,6 +90,7 @@ XMLHash_hash2xml(convert_ctx_t *ctx, SV *hash)
     return result;
 }
 
+#if defined(XMLHASH_HAVE_XML2) && defined(XMLHASH_HAVE_XML__LIBXML)
 SV *
 XMLHash_hash2dom(convert_ctx_t *ctx, SV *hash)
 {
@@ -129,3 +130,4 @@ XMLHash_hash2dom(convert_ctx_t *ctx, SV *hash)
 
     return x_PmmNodeToSv((xmlNodePtr) doc, NULL);
 }
+#endif

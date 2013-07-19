@@ -1,6 +1,7 @@
 #ifndef _XMLHASH_CONVERTER_DOC_H_
 #define _XMLHASH_CONVERTER_DOC_H_
 
+#if defined(XMLHASH_HAVE_XML2) && defined(XMLHASH_HAVE_XML__LIBXML)
 #include <libxml/parser.h>
 #include "xmlhash_common.h"
 #include "xmlhash_converter.h"
@@ -143,5 +144,6 @@ XMLHash_write_comment2doc(convert_ctx_t *ctx, char *value, xmlNodePtr rootNode)
         (void) xmlAddChild(rootNode, xmlNewDocComment(rootNode->doc, BAD_CAST value));
     }
 }
+#endif
 
 #endif
