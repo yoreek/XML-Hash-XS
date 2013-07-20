@@ -9,7 +9,6 @@ use Test::More;
 use File::Temp qw(tempfile);
 
 use XML::Hash::XS;
-use XML::LibXML;
 
 our $c;
 eval { $c = XML::Hash::XS->new(doc => 1) };
@@ -18,6 +17,7 @@ if ($@) {
 }
 else {
     plan tests => 9;
+    require XML::LibXML;
 }
 
 our $data;
