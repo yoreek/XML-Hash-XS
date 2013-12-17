@@ -150,7 +150,9 @@ WriteMakefile(
     PREREQ_PM        => {
         'Test::More'   => 0,
     },
-    OBJECT           => 'XS.o xmlhash_writer.o xmlhash_converter.o xmlhash_converter_doc.o',
+    OBJECT           => join(' ', '$(BASEEXT)$(OBJ_EXT)', map { s/\.c$/\$(OBJ_EXT)/; $_ } glob('src/*.c')),
+    CCFLAGS          => '-o $@',
+    clean            => { FILES => 'src/*.o' },
     get_config(),
 );
 

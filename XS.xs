@@ -1,5 +1,5 @@
-#include "xmlhash_common.h"
-#include "xmlhash_converter.h"
+#include "src/xmlhash_common.h"
+#include "src/xmlhash_converter.h"
 
 #define CONV_DEF_OUTPUT    NULL
 #define CONV_DEF_METHOD    "NATIVE"
