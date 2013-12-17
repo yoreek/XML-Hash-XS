@@ -152,6 +152,7 @@ WriteMakefile(
     },
     OBJECT           => join(' ', '$(BASEEXT)$(OBJ_EXT)', map { s/\.c$/\$(OBJ_EXT)/; $_ } glob('src/*.c')),
     CCFLAGS          => '-o $@',
+    H                => [ glob('src/*.h') ],
     clean            => { FILES => 'src/*.o' },
     get_config(),
 );
