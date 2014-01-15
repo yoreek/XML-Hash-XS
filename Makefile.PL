@@ -151,7 +151,7 @@ WriteMakefile(
         'Test::More'   => 0,
     },
     OBJECT           => join(' ', '$(BASEEXT)$(OBJ_EXT)', map { s/\.c$/\$(OBJ_EXT)/; $_ } glob('src/*.c')),
-    CCFLAGS          => '-o $@',
+    C                => [ 'XS.c', glob('src/*.c') ],
     H                => [ glob('src/*.h') ],
     clean            => { FILES => 'src/*.o' },
     get_config(),
@@ -170,6 +170,9 @@ sub generate_config {
 
     my (%config, %summary_config);
     my @options = qw(lib libpath incpath);
+
+    # remove unneded libxml2
+    delete $LIBS_AVAILABLE{xml2} unless exists $LIBS_AVAILABLE{'XML::LibXML'};
 
     foreach my $lib_config (values %LIBS_AVAILABLE) {
         foreach my $option (@options) {
@@ -202,11 +205,16 @@ sub generate_config {
         $summary_config{INC} = \@inc if scalar @inc;
     }
 
-    my @define = map { s/:/_/g; "-DXMLHASH_HAVE_" . uc($_) } keys %LIBS_AVAILABLE;
+    my @define = map { s/:/_/g; "-DXH_HAVE_" . uc($_) } keys %LIBS_AVAILABLE;
     $summary_config{DEFINE} = \@define if scalar @define;
 
     # convert array to string
     $summary_config{$_} = join(' ', @{ $summary_config{$_} }) for keys %summary_config;
+
+    # CCFLAGS
+    $summary_config{CCFLAGS}  = '-o $@';
+    $summary_config{CCFLAGS} .= ' -g -Wall -Werror -pedantic -std=c99 -DPERL_GCC_PEDANTIC -O0'
+        if $DEBUG;
 
     return %summary_config;
 }

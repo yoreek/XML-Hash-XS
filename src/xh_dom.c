@@ -1,7 +1,7 @@
-#include "xmlhash_common.h"
-#include "xmlhash_converter_doc.h"
+#include "xh_config.h"
+#include "xh_core.h"
 
-#if defined(XMLHASH_HAVE_XML2) && defined(XMLHASH_HAVE_XML__LIBXML)
+#ifdef XH_HAVE_DOM
 SV* x_PROXY_NODE_REGISTRY_MUTEX = NULL;
 
 static const char*

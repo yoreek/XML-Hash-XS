@@ -1,7 +1,5 @@
 #!/use/bin/perl
 
-use FindBin;
-use lib ("$FindBin::Bin/../blib/lib", "$FindBin::Bin/../blib/arch");
 use strict;
 use warnings;
 

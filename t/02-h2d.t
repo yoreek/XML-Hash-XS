@@ -1,7 +1,5 @@
 #!/use/bin/perl
 
-use FindBin;
-use lib ("$FindBin::Bin/../blib/lib", "$FindBin::Bin/../blib/arch");
 use strict;
 use warnings;
 
@@ -16,7 +14,7 @@ if ($@) {
     plan skip_all => "Option 'doc' is not supported";
 }
 else {
-    plan tests => 9;
+    plan tests => 11;
     require XML::LibXML;
 }
 
@@ -88,12 +86,29 @@ SKIP: {
 }
 
 {
-    $data = $c->hash2xml( { node1 => '&<>' } )->toString();
+    $data = $c->hash2xml( { node1 => "< > & \r" } )->toString();
     chomp $data;
     is
         $data,
-        qq{$xml\n<root><node1>&amp;&lt;&gt;</node1></root>},
+        qq{$xml\n<root><node1>&lt; &gt; &amp; &#13;</node1></root>},
         'escaping',
+    ;
+}
+
+{
+    $data = $c->hash2xml( { node => " \t\ntest "  }, trim => 0 )->toString();
+    chomp $data;
+    is
+        $data,
+        qq{$xml\n<root><node> \t\ntest </node></root>},
+        'trim 0',
+    ;
+    $data = $c->hash2xml( { node => " \t\ntest "  }, trim => 1 )->toString();
+    chomp $data;
+    is
+        $data,
+        qq{$xml\n<root><node>test</node></root>},
+        'trim 1',
     ;
 }
 
@@ -102,11 +117,10 @@ SKIP: {
         {
             node1 => 'value1"',
             node2 => 'value2&',
-            node3 => { node31 => 'value31' },
-            node4 => [ { node41 => 'value41' }, { node42 => 'value42' } ],
-            node5 => [ 51, 52, { node53 => 'value53' } ],
-            node6 => {},
-            node7 => [],
+            node3 => { node31 => 'value31', t => [ 'text' ] },
+            node4 => [ { node41 => 'value41', t => [ 'text' ] }, { node42 => 'value42', t => [ 'text' ] } ],
+            node5 => [ 51, 52, { node53 => 'value53', t => [ 'text' ] } ],
+            node6 => [],
         },
         use_attr  => 1,
         canonical => 1,
@@ -116,7 +130,7 @@ SKIP: {
         $data,
         <<"EOT",
 $xml
-<root node1="value1&quot;" node2="value2&amp;"><node3 node31="value31"/><node4 node41="value41"/><node4 node42="value42"/><node5>51</node5><node5>52</node5><node5 node53="value53"/><node6/></root>
+<root node1="value1&quot;" node2="value2&amp;"><node3 node31="value31"><t>text</t></node3><node4 node41="value41"><t>text</t></node4><node4 node42="value42"><t>text</t></node4><node5>51</node5><node5>52</node5><node5 node53="value53"><t>text</t></node5></root>
 EOT
         'use attributes',
     ;
@@ -126,7 +140,10 @@ EOT
     $data = $c->hash2xml(
         {
             content => 'content&1',
-            node2   => [ 21, { node22 => 'value23', 'content' => 'content2' } ],
+            node2   => [ 21, {
+                node22  => "value22 < > & \" \t \n \r",
+                content => "content < > & \r",
+            } ],
         },
         use_attr  => 1,
         canonical => 1,
@@ -137,7 +154,7 @@ EOT
         $data,
         <<"EOT",
 $xml
-<root>content&amp;1<node2>21</node2><node2 node22="value23">content2</node2></root>
+<root>content&amp;1<node2>21</node2><node2 node22="value22 &lt; &gt; &amp; &quot; &#9; &#10; &#13;">content &lt; &gt; &amp; &#13;</node2></root>
 EOT
         'content',
     ;

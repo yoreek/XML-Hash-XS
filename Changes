@@ -1,5 +1,8 @@
 Revision history for XML::Hash::XS.
 
+0.23    2014-01-15
+        Mass refactoring, fix many bugs and add some tests.
+
 0.22    2013-07-20
         Feature: Using XML::LibXML library is optional
         Fixbug: tests

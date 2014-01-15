@@ -1,11 +1,9 @@
 #!/use/bin/perl
 
-use FindBin;
-use lib ("$FindBin::Bin/../blib/lib", "$FindBin::Bin/../blib/arch");
 use strict;
 use warnings;
 
-use Test::More tests => 19;
+use Test::More tests => 21;
 use File::Temp qw(tempfile);
 
 use XML::Hash::XS 'hash2xml';
@@ -117,9 +115,22 @@ SKIP: {
 
 {
     is
-        $data = hash2xml( { node1 => '&<>' } ),
-        qq{$xml\n<root><node1>&amp;&lt;&gt;</node1></root>},
+        $data = hash2xml( { node1 => "< > & \r" } ),
+        qq{$xml\n<root><node1>&lt; &gt; &amp; &#13;</node1></root>},
         'escaping',
+    ;
+}
+
+{
+    is
+        $data = hash2xml( { node => " \t\ntest "  }, trim => 0 ),
+        qq{$xml\n<root><node> \t\ntest </node></root>},
+        'trim 0',
+    ;
+    is
+        $data = hash2xml( { node => " \t\ntest "  }, trim => 1 ),
+        qq{$xml\n<root><node>test</node></root>},
+        'trim 1',
     ;
 }
 
@@ -184,7 +195,10 @@ EOT
         $data = hash2xml(
             {
                 content => 'content&1',
-                node2   => [ 21, { node22 => 'value23', 'content' => 'content2' } ],
+                node2   => [ 21, {
+                    node22  => "value22 < > & \" \t \n \r",
+                    content => "content < > & \r",
+                } ],
             },
             use_attr  => 1,
             canonical => 1,
@@ -196,8 +210,8 @@ $xml
 <root>
   content&amp;1
   <node2>21</node2>
-  <node2 node22="value23">
-    content2
+  <node2 node22="value22 &lt; &gt; &amp; &quot; &#9; &#10; &#13;">
+    content &lt; &gt; &amp; &#13;
   </node2>
 </root>
 EOT

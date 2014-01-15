@@ -1,6 +1,6 @@
 TYPEMAP
-conv_opts_t * T_CONV
-xmlNodePtr    O_NODE_OBJECT
+xh_h2x_opts_t * T_CONV
+xmlNodePtr      O_NODE_OBJECT
 
 INPUT
 O_NODE_OBJECT
@@ -18,7 +18,7 @@ O_NODE_OBJECT
 T_CONV
     if (sv_isa($arg, \"XML::Hash::XS\")) {
         IV tmp = SvIV((SV *) SvRV($arg));
-        $var = INT2PTR(conv_opts_t *, tmp);
+        $var = INT2PTR(xh_h2x_opts_t *, tmp);
     } else
         Perl_croak(aTHX_ \"%s: %s is not of type XML::Hash::XS\",
             ${$ALIAS?\q[GvNAME(CvGV(cv))]:\qq[\"$pname\"]},
