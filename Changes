@@ -1,5 +1,8 @@
 Revision history for XML::Hash::XS.
 
+0.24    2014-01-17
+        Fixbug: overriding CCFLAGS when passed to WriteMakefile
+
 0.23    2014-01-15
         Mass refactoring, fix many bugs and add some tests.
 

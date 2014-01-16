@@ -212,7 +212,7 @@ sub generate_config {
     $summary_config{$_} = join(' ', @{ $summary_config{$_} }) for keys %summary_config;
 
     # CCFLAGS
-    $summary_config{CCFLAGS}  = '-o $@';
+    $summary_config{CCFLAGS}  = ( $Config{ccflags} || '' ) . ' -o $@';
     $summary_config{CCFLAGS} .= ' -g -Wall -Werror -pedantic -std=c99 -DPERL_GCC_PEDANTIC -O0'
         if $DEBUG;
 
