@@ -17,27 +17,18 @@ my $lx_hash = xml2hash($xml);
 my $xs_hash = XMLin($xml);
 my $xs_conv = XML::Hash::XS->new();
 
-cmpthese timethese 1000, {
-	'Hash' => sub {
+cmpthese -3, {
+	'XML::Hash' => sub {
 		my $oxml = $xml_converter->fromHashtoXMLString($xh_hash);
 	},
-	'Simple' => sub {
+	'XML::Simple' => sub {
 		my $oxml = XMLout($xs_hash);
 	},
-	'Hash::LX' => sub {
+	'XML::Hash::LX' => sub {
 		my $oxml = hash2xml($lx_hash);
 	},
-	'Hash::XS' => sub {
+	'XML::Hash::XS' => sub {
 		my $oxml = XML::Hash::XS::hash2xml($xs_hash);
-	},
-	'Hash::XS(OOP)' => sub {
-		my $oxml = $xs_conv->hash2xml($xs_hash);
-	},
-	'Hash::XS(OOP to DOM)' => sub {
-		my $oxml = $xs_conv->hash2xml($xs_hash, doc => 1);
-	},
-	'Hash::XS(LX)' => sub {
-		my $oxml = XML::Hash::XS::hash2xml($lx_hash, method => 'LX');
 	},
 };
 

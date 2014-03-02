@@ -5,42 +5,48 @@ use strict;
 no strict 'refs';
 use warnings;
 
-use base 'Exporter';
-our @EXPORT_OK = our @EXPORT = qw( hash2xml );
+use vars qw($VERSION @EXPORT @EXPORT_OK);
 
-our $VERSION = '0.24';
+use base 'Exporter';
+@EXPORT_OK = @EXPORT = qw( hash2xml );
+
+$VERSION = '0.24';
 
 require XSLoader;
 XSLoader::load('XML::Hash::XS', $VERSION);
+
+use vars qw($method $output $root $version $encoding $indent $canonical
+    $use_attr $content $xml_decl $doc $max_depth $attr $text $trim $cdata $comm
+);
 
 # 'NATIVE' or 'LX'
 our $method    = 'NATIVE';
 
 # native options
-our $output    = undef;
-our $root      = 'root';
-our $version   = '1.0';
-our $encoding  = 'utf-8';
-our $indent    = 0;
-our $canonical = 0;
-our $use_attr  = 0;
-our $content   = undef;
-our $xml_decl  = 1;
-our $doc       = 0;
-our $max_depth = 1024;
+$output    = undef;
+$root      = 'root';
+$version   = '1.0';
+$encoding  = 'utf-8';
+$indent    = 0;
+$canonical = 0;
+$use_attr  = 0;
+$content   = undef;
+$xml_decl  = 1;
+$doc       = 0;
+$max_depth = 1024;
+$trim      = 0;
 
 # XML::Hash::LX options
-our $attr      = '-';
-our $text      = '#text';
-our $trim      = 0;
-our $cdata     = undef;
-our $comm      = undef;
+$attr      = '-';
+$text      = '#text';
+$cdata     = undef;
+$comm      = undef;
 
 1;
 __END__
 =head1 NAME
 
-XML::Hash::XS - Simple and fast hash to XML conversion
+XML::Hash::XS - Simple and fast hash to XML conversion written in C
 
 =head1 SYNOPSIS
 
@@ -58,7 +64,19 @@ Or OOP way:
 
 =head1 DESCRIPTION
 
-This module implements simple hash to XML converter written in C using libxml2 library.
+This module implements simple hash to XML conversion written in C.
+
+During conversion uses minimum of memory, XML is generated as string or written directly to output file without building DOM.
+
+Some features are optional and are available with appropriate libraries:
+
+=over 2
+
+=item * XML::LibXML library is required  in order to build DOM
+
+=item * ICU or iconv library is required in order to perform charset conversions
+
+=back
 
 =head1 FUNCTIONS
 
@@ -119,18 +137,6 @@ will convert to:
     </root>
 
 
-Compose benchmark:
-
-                    Rate    Hash Hash::LX Simple Hash::XS(LX) Hash::XS Hash::XS(OOP)
-    Hash          34.6/s      --     -10%   -38%         -99%     -99%          -99%
-    Hash::LX      38.5/s     11%       --   -31%         -98%     -99%          -99%
-    Simple        56.0/s     62%      46%     --         -98%     -98%          -98%
-    Hash::XS(LX)  2381/s   6781%    6088%  4152%           --     -33%          -36%
-    Hash::XS      3571/s  10221%    9182%  6279%          50%       --           -4%
-    Hash::XS(OOP) 3704/s  10604%    9526%  6515%          56%       4%            --
-
-Benchmark was done on L<http://search.cpan.org/uploads.rdf>
-
 =head1 OPTIONS
 
 =over 4
@@ -188,9 +194,9 @@ if xml_decl is "1", output will start with the XML declaration '<?xml version="1
 
 if xml_decl is "0", XML declaration will not be output.
 
-=item content [ = undef ]
+=item trim [ = 1 ]
 
-if defined this options spicify a key name for storing text
+Trim leading and trailing whitespace from text nodes
 
 =item method [ = 'NATIVE' ]
 
@@ -198,23 +204,29 @@ experimental support the conversion methods other libraries
 
 if method is 'LX' then conversion result is the same as using L<XML::Hash::LX> library
 
-Note: for 'LX' method following options are available:
-    encoding
+Note: for 'LX' method following additional options are available:
     attr
-    text
-    trim
     cdata
+    text
     comm
 
 =back
 
+=head1 BENCHMARK
+
+Performance benchmark in comparison with some popular modules:
+
+                    Rate     XML::Hash XML::Hash::LX   XML::Simple XML::Hash::XS
+    XML::Hash     65.0/s            --           -6%          -37%          -99%
+    XML::Hash::LX 68.8/s            6%            --          -33%          -99%
+    XML::Simple    103/s           58%           49%            --          -98%
+    XML::Hash::XS 4879/s         7404%         6988%         4658%            --
+
+Benchmark was done on L<http://search.cpan.org/uploads.rdf>
+
 =head1 AUTHOR
 
-=over 4
-
-Yuriy Ustushenko, E<lt><yoreek@yahoo.com>E<gt>
-
-=back
+Yuriy Ustushenko, E<lt>yoreek@yahoo.comE<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
