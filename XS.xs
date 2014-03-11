@@ -11,11 +11,12 @@ new(CLASS,...)
     PREINIT:
         xh_h2x_opts_t  *opts;
     CODE:
+        dXCPT;
+
         if ((opts = xh_h2x_create()) == NULL) {
             croak("Malloc error in new()");
         }
 
-        dXCPT;
         XCPT_TRY_START
         {
             xh_h2x_parse_param(opts, 1, ax, items);

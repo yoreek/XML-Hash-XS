@@ -10,7 +10,7 @@ use vars qw($VERSION @EXPORT @EXPORT_OK);
 use base 'Exporter';
 @EXPORT_OK = @EXPORT = qw( hash2xml );
 
-$VERSION = '0.24';
+$VERSION = '0.25';
 
 require XSLoader;
 XSLoader::load('XML::Hash::XS', $VERSION);
@@ -209,6 +209,60 @@ Note: for 'LX' method following additional options are available:
     cdata
     text
     comm
+
+=back
+
+=head1 OBJECT_SERIALISATION
+
+=over 2
+
+=item 1. When object has a "toString" method
+
+In this case, the <toString> method of object is invoked in scalar context.
+It must return a single scalar that can be directly encoded into XML.
+
+Example:
+
+    use XML::LibXML;
+    local $XML::LibXML::skipXMLDeclaration = 1;
+    my $doc = XML::LibXML->new->parse_string('<foo bar="1"/>');
+    print hash2xml({ doc => $doc }, indent => 2, xml_decl => 0);
+    =>
+    <root>
+      <doc><foo bar="1"/></doc>
+    </root>
+
+=item 2. When object has a "iternext" method ("NATIVE" method only)
+
+In this case, the <iternext> method method will invoke a few times until the return value is not undefined.
+
+Example:
+
+    my $count = 0;
+    my $o = bless {}, 'Iterator';
+    *Iterator::iternext = sub { $count++ < 3 ? { count => $count } : undef };
+    print hash2xml({ item => $o }, use_attr => 1, indent => 2, xml_decl => 0);
+    =>
+    <root>
+      <item count="1"/>
+      <item count="2"/>
+      <item count="3"/>
+    </root>
+
+This can be used to generate a large XML using minimum memory, example with DBI:
+
+    my $sth = $dbh->prepare('SELECT * FROM foo WHERE bar=?');
+    $sth->execute(...);
+    my $o = bless {}, 'Iterator';
+    *Iterator::iternext = sub { $sth->fetchrow_hashref() };
+    open(my $fh, '>', 'data.xml');
+    hash2xml({ row => $o }, use_attr => 1, indent => 2, xml_decl => 0, output => $fh);
+    =>
+    <root>
+      <row bar="..." ... />
+      <row bar="..." ... />
+      ...
+    </root>
 
 =back
 

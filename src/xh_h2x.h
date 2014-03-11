@@ -15,6 +15,13 @@ extern const char indent_string[60];
 #define XH_H2X_F_CONTENT                4
 #define XH_H2X_F_ATTR_ONLY              8
 
+#define XH_H2X_T_SCALAR                 1
+#define XH_H2X_T_HASH                   2
+#define XH_H2X_T_ARRAY                  4
+#define XH_H2X_T_BLESSED                8
+#define XH_H2X_T_RAW                    16
+#define XH_H2X_T_NOT_NULL               (XH_H2X_T_SCALAR | XH_H2X_T_ARRAY | XH_H2X_T_HASH)
+
 typedef enum {
     XH_H2X_METHOD_NATIVE = 0,
     XH_H2X_METHOD_NATIVE_ATTR_MODE,
@@ -54,84 +61,122 @@ typedef struct {
     xh_stack_t             stash;
 } xh_h2x_ctx_t;
 
-XH_INLINE void
-xh_h2x_resolve_value(xh_h2x_ctx_t *ctx, SV **value, xh_bool_t *raw)
+XH_INLINE SV *
+xh_h2x_call_method(SV *obj, GV *method, char *method_name)
+{
+    int  count;
+    SV  *result = &PL_sv_undef;
+
+    dSP;
+
+    ENTER; SAVETMPS; PUSHMARK (SP);
+    XPUSHs(sv_2mortal(newRV_inc(obj)));
+    PUTBACK;
+
+    count = call_sv((SV *) GvCV(method), G_SCALAR);
+
+    SPAGAIN;
+
+    if (count) {
+        result = POPs;
+        SvREFCNT_inc_void(result);
+    }
+
+    PUTBACK;
+
+    FREETMPS; LEAVE;
+
+    return result;
+}
+
+XH_INLINE SV *
+xh_h2x_resolve_value(xh_h2x_ctx_t *ctx, SV *value, xh_uint_t *type)
 {
     xh_int_t  nitems;
-    SV       *sv;
+    GV       *method;
 
-    *raw = FALSE;
+    *type = 0;
 
-    while ( *value && SvROK(*value) ) {
+    while ( SvOK(value) && SvROK(value) ) {
         if (++ctx->depth > ctx->opts.max_depth)
             croak("Maximum recursion depth exceeded");
 
-        *value = SvRV(*value);
-        sv     = *value;
+        value = SvRV(value);
+        *type = 0;
 
-        if (expect_false( SvOBJECT(sv) )) {
-            /* object */
-            GV *to_string = gv_fetchmethod_autoload (SvSTASH (sv), "toString", 0);
-            if (to_string) {
+        if (SvOBJECT(value)) {
+            if ((method = gv_fetchmethod_autoload(SvSTASH(value), "toString", 0)) != NULL) {
                 dSP;
 
-                ENTER; SAVETMPS; PUSHMARK (SP);
-                XPUSHs (sv_bless (sv_2mortal (newRV_inc (sv)), SvSTASH (sv)));
-
-                /* calling with G_SCALAR ensures that we always get a 1 return value */
+                ENTER; SAVETMPS; PUSHMARK(SP);
+                XPUSHs(sv_2mortal(newRV_inc(value)));
                 PUTBACK;
-                call_sv ((SV *)GvCV (to_string), G_SCALAR);
+
+                nitems = call_sv((SV *) GvCV(method), G_SCALAR);
+
                 SPAGAIN;
 
-                /* catch this surprisingly common error */
-                if (SvROK (TOPs) && SvRV (TOPs) == sv)
-                    croak("%s::toString method returned same object as was passed instead of a new one", HvNAME (SvSTASH (sv)));
+                if (nitems == 1) {
+                    value = POPs;
+                    PUTBACK;
 
-                *value = POPs;
-                PUTBACK;
+                    SvREFCNT_inc_void(value);
 
-                SvREFCNT_inc(*value);
+                    xh_stash_push(&ctx->stash, value);
 
-                xh_stash_push(&ctx->stash, *value);
+                    FREETMPS; LEAVE;
+                }
+                else {
+                    value = &PL_sv_undef;
+                }
 
-                FREETMPS; LEAVE;
-
-                *raw = TRUE;
-
-                continue;
+                *type |= XH_H2X_T_RAW;
             }
         }
-        else if(SvTYPE(*value) == SVt_PVCV) {
-            /* code ref */
-            *raw = FALSE;
-
+        else if( SvTYPE(value) == SVt_PVCV ) {
             dSP;
 
             ENTER; SAVETMPS; PUSHMARK (SP);
 
-            nitems = call_sv(*value, G_SCALAR|G_NOARGS);
+            nitems = call_sv(value, G_SCALAR|G_NOARGS);
 
             SPAGAIN;
 
             if (nitems == 1) {
-                *value = POPs;
+                value = POPs;
 
-                SvREFCNT_inc(*value);
+                SvREFCNT_inc_void(value);
 
-                xh_stash_push(&ctx->stash, *value);
+                xh_stash_push(&ctx->stash, value);
 
                 PUTBACK;
 
                 FREETMPS;
                 LEAVE;
-
-                continue;
             }
             else {
-                *value = NULL;
+                value = &PL_sv_undef;
             }
         }
     }
+
+    if (SvTYPE(value) == SVt_PVHV) {
+        *type |= XH_H2X_T_HASH;
+    }
+    else if (SvTYPE(value) == SVt_PVAV) {
+        *type |= XH_H2X_T_ARRAY;
+    }
+    else if (!SvOK(value)) {
+        *type = 0;
+    }
+    else {
+        *type |= XH_H2X_T_SCALAR;
+    }
+
+    if (SvOBJECT(value))
+        *type |= XH_H2X_T_BLESSED;
+
+    return value;
 }
 
 xh_h2x_opts_t *xh_h2x_create(void);

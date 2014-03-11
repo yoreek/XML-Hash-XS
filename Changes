@@ -1,5 +1,9 @@
 Revision history for XML::Hash::XS.
 
+0.25    2014-03-11
+        Feature: object serialization using methods "toString" and "iternext"
+        Fixbug: docs and other minor fixes
+
 0.24    2014-01-17
         Fixbug: overriding CCFLAGS when passed to WriteMakefile
 

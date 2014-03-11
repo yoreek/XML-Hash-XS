@@ -35,10 +35,10 @@ xh_writer_write_to_perl_obj(xh_buffer_t *buf, SV *perl_obj)
     size_t len = buf->cur - buf->start;
 
     if (len > 0) {
+        dSP;
+
         *buf->cur = '\0';
         SvCUR_set(buf->scalar, len);
-
-        dSP;
 
         ENTER;
         SAVETMPS;
@@ -49,7 +49,7 @@ xh_writer_write_to_perl_obj(xh_buffer_t *buf, SV *perl_obj)
         PUSHs(buf->scalar);
         PUTBACK;
 
-        call_method("PRINT", G_SCALAR);
+        call_method("PRINT", G_DISCARD);
 
         FREETMPS;
         LEAVE;

@@ -104,15 +104,15 @@ xh_h2x_create(void)
 void
 xh_h2x_parse_param(xh_h2x_opts_t *opts, xh_int_t first, I32 ax, I32 items)
 {
-    if ((items - first) % 2 != 0) {
-        croak("Odd number of parameters in new()");
-    }
-
     xh_int_t  i;
     char     *p, *cv;
     SV       *v;
     STRLEN    len;
     xh_int_t  use_attr = -1;
+
+    if ((items - first) % 2 != 0) {
+        croak("Odd number of parameters in new()");
+    }
 
     for (i = first; i < items; i = i + 2) {
         v = ST(i);
@@ -321,13 +321,14 @@ xh_h2x(xh_h2x_ctx_t *ctx, SV *hash)
 SV *
 xh_h2d(xh_h2x_ctx_t *ctx, SV *hash)
 {
+    dXCPT;
+
     xmlDocPtr doc = xmlNewDoc(BAD_CAST ctx->opts.version);
     if (doc == NULL) {
         croak("Can't create new document");
     }
     doc->encoding = (const xmlChar*) xmlStrdup((const xmlChar*) ctx->opts.encoding);
 
-    dXCPT;
     XCPT_TRY_START
     {
         xh_stack_init(&ctx->stash, XH_H2X_STASH_SIZE, sizeof(SV *));

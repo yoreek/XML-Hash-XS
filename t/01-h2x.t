@@ -1,37 +1,35 @@
-#!/use/bin/perl
 
 use strict;
 use warnings;
 
-use Test::More tests => 21;
+use Test::More tests => 23;
 use File::Temp qw(tempfile);
 
 use XML::Hash::XS 'hash2xml';
 
-our $data;
-our $xml = qq{<?xml version="1.0" encoding="utf-8"?>};
+our $xml_decl = qq{<?xml version="1.0" encoding="utf-8"?>};
 
 {
     is
-        $data = hash2xml( { node1 => [ 'value1', { node2 => 'value2' } ] } ),
-        qq{$xml\n<root><node1>value1</node1><node1><node2>value2</node2></node1></root>},
+        hash2xml( { node1 => [ 'value1', { node2 => 'value2' } ] } ),
+        qq{$xml_decl\n<root><node1>value1</node1><node1><node2>value2</node2></node1></root>},
         'default',
     ;
 }
 
 {
     is
-        $data = hash2xml( { node3 => 'value3', node1 => 'value1', node2 => 'value2' }, canonical => 1 ),
-        qq{$xml\n<root><node1>value1</node1><node2>value2</node2><node3>value3</node3></root>},
+        hash2xml( { node3 => 'value3', node1 => 'value1', node2 => 'value2' }, canonical => 1 ),
+        qq{$xml_decl\n<root><node1>value1</node1><node2>value2</node2><node3>value3</node3></root>},
         'canonical',
     ;
 }
 
 {
     is
-        $data = hash2xml( { node1 => [ 'value1', { node2 => 'value2' } ] }, indent => 2 ),
+        hash2xml( { node1 => [ 'value1', { node2 => 'value2' } ] }, indent => 2 ),
         <<"EOT",
-$xml
+$xml_decl
 <root>
   <node1>value1</node1>
   <node1>
@@ -45,8 +43,8 @@ EOT
 
 {
     is
-        $data = hash2xml( { node1 => [ 1, '2', '2' + 1 ] } ),
-        qq{$xml\n<root><node1>1</node1><node1>2</node1><node1>3</node1></root>},
+        hash2xml( { node1 => [ 1, '2', '2' + 1 ] } ),
+        qq{$xml_decl\n<root><node1>1</node1><node1>2</node1><node1>3</node1></root>},
         'integer, string, integer + string',
     ;
 }
@@ -55,53 +53,54 @@ EOT
     my $x = 1.1;
     my $y = '2.2';
     is
-        $data = hash2xml( { node1 => [ $x, $y, $y + $x ] } ),
-        qq{$xml\n<root><node1>1.1</node1><node1>2.2</node1><node1>3.3</node1></root>},
+        hash2xml( { node1 => [ $x, $y, $y + $x ] } ),
+        qq{$xml_decl\n<root><node1>1.1</node1><node1>2.2</node1><node1>3.3</node1></root>},
         'double, string, double + string',
     ;
 }
 
 {
     is
-        $data = hash2xml( { 1 => 'value1' } ),
-        qq{$xml\n<root><_1>value1</_1></root>},
+        hash2xml( { 1 => 'value1' } ),
+        qq{$xml_decl\n<root><_1>value1</_1></root>},
         'quote tag name',
     ;
 }
 
 {
     is
-        $data = hash2xml( { node1 => \'value1' } ),
-        qq{$xml\n<root><node1>value1</node1></root>},
+        hash2xml( { node1 => \'value1' } ),
+        qq{$xml_decl\n<root><node1>value1</node1></root>},
         'scalar reference',
     ;
 }
 
 {
     is
-        $data = hash2xml( { node1 => sub { 'value1' } } ),
-        qq{$xml\n<root><node1>value1</node1></root>},
+        hash2xml( { node1 => sub { 'value1' } } ),
+        qq{$xml_decl\n<root><node1>value1</node1></root>},
         'code reference',
     ;
 }
 
 {
     is
-        $data = hash2xml( { node1 => sub { undef } } ),
-        qq{$xml\n<root><node1/></root>},
+        hash2xml( { node1 => sub { undef } } ),
+        qq{$xml_decl\n<root><node1/></root>},
         'code reference with undef',
     ;
 }
 
 {
     is
-        $data = hash2xml( { node1 => sub { [ 'value1' ] } } ),
-        qq{$xml\n<root><node1>value1</node1></root>},
+        hash2xml( { node1 => sub { [ 'value1' ] } } ),
+        qq{$xml_decl\n<root><node1>value1</node1></root>},
         'code reference with array',
     ;
 }
 
 SKIP: {
+    my $data;
     eval { $data = hash2xml( { node1 => 'Тест' }, encoding => 'cp1251' ) };
     my $err = $@;
     chomp $err;
@@ -115,33 +114,34 @@ SKIP: {
 
 {
     is
-        $data = hash2xml( { node1 => "< > & \r" } ),
-        qq{$xml\n<root><node1>&lt; &gt; &amp; &#13;</node1></root>},
+        hash2xml( { node1 => "< > & \r" } ),
+        qq{$xml_decl\n<root><node1>&lt; &gt; &amp; &#13;</node1></root>},
         'escaping',
     ;
 }
 
 {
     is
-        $data = hash2xml( { node => " \t\ntest "  }, trim => 0 ),
-        qq{$xml\n<root><node> \t\ntest </node></root>},
+        hash2xml( { node => " \t\ntest "  }, trim => 0 ),
+        qq{$xml_decl\n<root><node> \t\ntest </node></root>},
         'trim 0',
     ;
     is
-        $data = hash2xml( { node => " \t\ntest "  }, trim => 1 ),
-        qq{$xml\n<root><node>test</node></root>},
+        hash2xml( { node => " \t\ntest "  }, trim => 1 ),
+        qq{$xml_decl\n<root><node>test</node></root>},
         'trim 1',
     ;
 }
 
 {
+    my $data;
     my $fh = tempfile();
     hash2xml( { node1 => 'value1' }, output => $fh );
     seek($fh, 0, 0);
     { local $/; $data = <$fh> }
     is
         $data,
-        qq{$xml\n<root><node1>value1</node1></root>},
+        qq{$xml_decl\n<root><node1>value1</node1></root>},
         'filehandle output',
     ;
 }
@@ -153,14 +153,14 @@ SKIP: {
     untie *STDOUT;
     is
         $data,
-        qq{$xml\n<root><node1>value1</node1></root>},
+        qq{$xml_decl\n<root><node1>value1</node1></root>},
         'tied filehandle output',
     ;
 }
 
 {
     is
-        $data = hash2xml(
+        hash2xml(
             {
                 node1 => 'value1"',
                 node2 => 'value2&',
@@ -175,7 +175,7 @@ SKIP: {
             indent    => 2,
         ),
         <<"EOT",
-$xml
+$xml_decl
 <root node1="value1&quot;" node2="value2&amp;">
   <node3 node31="value31"/>
   <node4 node41="value41"/>
@@ -192,7 +192,7 @@ EOT
 
 {
     is
-        $data = hash2xml(
+        hash2xml(
             {
                 content => 'content&1',
                 node2   => [ 21, {
@@ -206,7 +206,7 @@ EOT
             content   => 'content',
         ),
         <<"EOT",
-$xml
+$xml_decl
 <root>
   content&amp;1
   <node2>21</node2>
@@ -222,10 +222,10 @@ EOT
 {
     my $o = TestObject->new();
     is
-        $data = hash2xml(
+        hash2xml(
             { object => $o },
         ),
-        qq{$xml\n<root><object><root attr="1">value1</root></object></root>},
+        qq{$xml_decl\n<root><object><root attr="1">value1</root></object></root>},
         'object',
     ;
 }
@@ -236,14 +236,14 @@ EOT
     $XML::Hash::XS::canonical = 1;
     $XML::Hash::XS::content   = 'content';
     is
-        $data = hash2xml(
+        hash2xml(
             {
                 content => 'content&1',
                 node2   => [ 21, { node22 => 'value23', 'content' => 'content2' } ],
             },
         ),
         <<"EOT",
-$xml
+$xml_decl
 <root>
   content&amp;1
   <node2>21</node2>
@@ -263,7 +263,7 @@ EOT
     $XML::Hash::XS::content   = 'content';
     $XML::Hash::XS::xml_decl  = 0;
     is
-        $data = hash2xml(
+        hash2xml(
             {
                 node1 => 'value1',
             },
@@ -273,6 +273,70 @@ EOT
 EOT
         'xml declaration',
     ;
+}
+
+{
+    $XML::Hash::XS::indent    = 2;
+    $XML::Hash::XS::use_attr  = 1;
+    $XML::Hash::XS::canonical = 1;
+    $XML::Hash::XS::xml_decl  = 0;
+    my @arr = (1, 2, 3, { att1 => 1, att2 => 2 });
+    my $obj = new Iterator sub { shift @arr };
+    is
+        hash2xml(
+            {
+                iterator => $obj,
+            },
+        ),
+        <<"EOT",
+<root>
+  <iterator>1</iterator>
+  <iterator>2</iterator>
+  <iterator>3</iterator>
+  <iterator att1="1" att2="2"/>
+</root>
+EOT
+        'iterator & attr',
+    ;
+}
+
+{
+    $XML::Hash::XS::indent    = 2;
+    $XML::Hash::XS::use_attr  = 0;
+    $XML::Hash::XS::canonical = 1;
+    $XML::Hash::XS::xml_decl  = 0;
+    my @arr = (1, 2, 3, { att1 => 1, att2 => 2});
+    my $obj = new Iterator sub { shift @arr };
+    is
+        hash2xml(
+            {
+                iterator => $obj,
+            },
+        ),
+        <<"EOT",
+<root>
+  <iterator>1</iterator>
+  <iterator>2</iterator>
+  <iterator>3</iterator>
+  <iterator>
+    <att1>1</att1>
+    <att2>2</att2>
+  </iterator>
+</root>
+EOT
+        'iterator',
+    ;
+}
+
+package Iterator;
+
+sub new {
+    my ($class, $cb) = @_;
+    return bless { cb => $cb }, $class;
+}
+
+sub iternext {
+    return shift->{cb}->();
 }
 
 package TestObject;

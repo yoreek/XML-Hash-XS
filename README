@@ -1,5 +1,5 @@
 NAME
-    XML::Hash::XS - Simple and fast hash to XML conversion
+    XML::Hash::XS - Simple and fast hash to XML conversion written in C
 
 SYNOPSIS
         use XML::Hash::XS;
@@ -15,8 +15,17 @@ SYNOPSIS
         my $xmlstr = $conv->hash2xml(\%hash, [<options>]);
 
 DESCRIPTION
-    This module implements simple hash to XML converter written in C using
-    libxml2 library.
+    This module implements simple hash to XML conversion written in C.
+
+    During conversion uses minimum of memory, XML is generated as string or
+    written directly to output file without building DOM.
+
+    Some features are optional and are available with appropriate libraries:
+
+    * XML::LibXML library is required in order to build DOM
+
+    * ICU or iconv library is required in order to perform charset
+      conversions
 
 FUNCTIONS
   hash2xml $hash, [ %options ]
@@ -74,18 +83,6 @@ FUNCTIONS
           <node5 node51="value51"/>
         </root>
 
-    Compose benchmark:
-
-                        Rate    Hash Hash::LX Simple Hash::XS(LX) Hash::XS Hash::XS(OOP)
-        Hash          34.6/s      --     -10%   -38%         -99%     -99%          -99%
-        Hash::LX      38.5/s     11%       --   -31%         -98%     -99%          -99%
-        Simple        56.0/s     62%      46%     --         -98%     -98%          -98%
-        Hash::XS(LX)  2381/s   6781%    6088%  4152%           --     -33%          -36%
-        Hash::XS      3571/s  10221%    9182%  6279%          50%       --           -4%
-        Hash::XS(OOP) 3704/s  10604%    9526%  6515%          56%       4%            --
-
-    Benchmark was done on <http://search.cpan.org/uploads.rdf>
-
 OPTIONS
     doc [ => 0 ]
         if doc is '1', then returned value is XML::LibXML::Document.
@@ -134,8 +131,8 @@ OPTIONS
 
         if xml_decl is "0", XML declaration will not be output.
 
-    content [ = undef ]
-        if defined this options spicify a key name for storing text
+    trim [ = 1 ]
+        Trim leading and trailing whitespace from text nodes
 
     method [ = 'NATIVE' ]
         experimental support the conversion methods other libraries
@@ -143,11 +140,72 @@ OPTIONS
         if method is 'LX' then conversion result is the same as using
         XML::Hash::LX library
 
-        Note: for 'LX' method following options are available: encoding attr
-        text trim cdata comm
+        Note: for 'LX' method following additional options are available:
+        attr cdata text comm
+
+OBJECT_SERIALISATION
+    1. When object has a "toString" method
+      In this case, the <toString> method of object is invoked in scalar
+      context. It must return a single scalar that can be directly encoded
+      into XML.
+
+      Example:
+
+          use XML::LibXML;
+          local $XML::LibXML::skipXMLDeclaration = 1;
+          my $doc = XML::LibXML->new->parse_string('<foo bar="1"/>');
+          print hash2xml({ doc => $doc }, indent => 2, xml_decl => 0);
+          =>
+          <root>
+            <doc><foo bar="1"/></doc>
+          </root>
+
+    2. When object has a "iternext" method ("NATIVE" method only)
+      In this case, the <iternext> method method will invoke a few times
+      until the return value is not undefined.
+
+      Example:
+
+          my $count = 0;
+          my $o = bless {}, 'Iterator';
+          *Iterator::iternext = sub { $count++ < 3 ? { count => $count } : undef };
+          print hash2xml({ item => $o }, use_attr => 1, indent => 2, xml_decl => 0);
+          =>
+          <root>
+            <item count="1"/>
+            <item count="2"/>
+            <item count="3"/>
+          </root>
+
+      This can be used to generate a large XML using minimum memory, example
+      with DBI:
+
+          my $sth = $dbh->prepare('SELECT * FROM foo WHERE bar=?');
+          $sth->execute(...);
+          my $o = bless {}, 'Iterator';
+          *Iterator::iternext = sub { $sth->fetchrow_hashref() };
+          open(my $fh, '>', 'data.xml');
+          hash2xml({ row => $o }, use_attr => 1, indent => 2, xml_decl => 0, output => $fh);
+          =>
+          <root>
+            <row bar="..." ... />
+            <row bar="..." ... />
+            ...
+          </root>
+
+BENCHMARK
+    Performance benchmark in comparison with some popular modules:
+
+                        Rate     XML::Hash XML::Hash::LX   XML::Simple XML::Hash::XS
+        XML::Hash     65.0/s            --           -6%          -37%          -99%
+        XML::Hash::LX 68.8/s            6%            --          -33%          -99%
+        XML::Simple    103/s           58%           49%            --          -98%
+        XML::Hash::XS 4879/s         7404%         6988%         4658%            --
+
+    Benchmark was done on <http://search.cpan.org/uploads.rdf>
 
 AUTHOR
-        Yuriy Ustushenko, <<yoreek@yahoo.com>>
+    Yuriy Ustushenko, <yoreek@yahoo.com>
 
 COPYRIGHT AND LICENSE
     Copyright (C) 2013 Yuriy Ustushenko

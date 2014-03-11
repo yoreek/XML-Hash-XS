@@ -90,15 +90,11 @@ our @REQUIRED_LIBS = (
         configs => [
             {
                 lib      => 'c',
-                libpath  => \@COMMON_LIB_PATH,
-                incpath  => \@COMMON_INC_PATH,
                 header   => 'iconv.h',
                 function => 'iconv_t iconv = iconv_open("UTF-8", "UTF-8");(void) iconv_close(iconv);',
             },
             {
                 lib      => 'iconv',
-                libpath  => \@COMMON_LIB_PATH,
-                incpath  => \@COMMON_INC_PATH,
                 header   => 'iconv.h',
                 function => 'iconv_t iconv = iconv_open("UTF-8", "UTF-8");(void) iconv_close(iconv);',
             },
