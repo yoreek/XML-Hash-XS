@@ -75,7 +75,7 @@ xh_dom_new_node(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, char *name, size_t name_
 
     tmp = NULL;
     if (name[0] >= '1' && name[0] <= '9') {
-        tmp = malloc(name_len + 1);
+        tmp = malloc(name_len + 2);
         if (tmp == NULL) {
             croak("Memory allocation error");
         }

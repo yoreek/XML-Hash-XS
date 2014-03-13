@@ -7,6 +7,9 @@
 #ifdef XH_HAVE_ENCODER
 
 #ifdef XH_HAVE_ICONV
+#if defined(__MINGW32__) || defined(_WIN32)
+#define LIBICONV_STATIC
+#endif
 #include <iconv.h>
 #endif
 #ifdef XH_HAVE_ICU

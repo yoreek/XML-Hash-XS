@@ -1,5 +1,10 @@
 Revision history for XML::Hash::XS.
 
+0.26    2014-03-13
+        Fixbug: compilation failure on some OS
+        Fixbug: compilation failure when using libiconv with MinGW
+        Fixbug: segmentation fault when using XML::LibXML
+
 0.25    2014-03-11
         Feature: object serialization using methods "toString" and "iternext"
         Fixbug: docs and other minor fixes

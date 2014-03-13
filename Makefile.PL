@@ -146,6 +146,7 @@ WriteMakefile(
     PREREQ_PM        => {
         'Test::More'   => 0,
     },
+    CCFLAGS          => $Config{ccflags} . ' -o $@',
     OBJECT           => join(' ', '$(BASEEXT)$(OBJ_EXT)', map { s/\.c$/\$(OBJ_EXT)/; $_ } glob('src/*.c')),
     C                => [ 'XS.c', glob('src/*.c') ],
     H                => [ glob('src/*.h') ],
