@@ -7,20 +7,20 @@
 #define XH_PARAM_LEN 32
 
 #define XH_PARAM_READ_INIT                              \
-    SV   *sv;                                           \
-    char *str;
+    SV        *sv;                                      \
+    xh_char_t *str;
 #define XH_PARAM_READ_STRING(var, name, def_value)      \
     if ( (sv = get_sv(name, 0)) != NULL ) {             \
         if ( SvOK(sv) ) {                               \
-            str = (char *) SvPV_nolen(sv);              \
-            strncpy(var, str, XH_PARAM_LEN);            \
+            str = XH_CHAR_CAST SvPV_nolen(sv);          \
+            xh_str_copy(var, str, XH_PARAM_LEN);        \
         }                                               \
         else {                                          \
             var[0] = '\0';                              \
         }                                               \
     }                                                   \
     else {                                              \
-        strncpy(var, def_value, XH_PARAM_LEN);          \
+        xh_str_copy(var, XH_CHAR_CAST def_value, XH_PARAM_LEN);\
     }
 #define XH_PARAM_READ_BOOL(var, name, def_value)        \
     if ( (sv = get_sv(name, 0)) != NULL ) {             \
@@ -54,8 +54,8 @@
         var = def_value;                                \
     }
 
-void xh_param_assign_string(char param[], SV *value);
-void xh_param_assign_int(char *name, xh_int_t *param, SV *value);
+void xh_param_assign_string(xh_char_t param[], SV *value);
+void xh_param_assign_int(xh_char_t *name, xh_int_t *param, SV *value);
 xh_bool_t xh_param_assign_bool(SV *value);
 
 #endif /* _XH_PARAM_H_ */

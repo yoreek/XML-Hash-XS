@@ -1,30 +1,28 @@
 #include "src/xh_config.h"
 #include "src/xh_core.h"
-#include "src/xh_h2x.h"
 
 MODULE = XML::Hash::XS PACKAGE = XML::Hash::XS
 
 PROTOTYPES: DISABLE
 
-xh_h2x_opts_t *
+xh_opts_t *
 new(CLASS,...)
     PREINIT:
-        xh_h2x_opts_t  *opts;
+        xh_opts_t  *opts;
     CODE:
         dXCPT;
 
-        if ((opts = xh_h2x_create()) == NULL) {
+        if ((opts = xh_create_opts()) == NULL)
             croak("Malloc error in new()");
-        }
 
         XCPT_TRY_START
         {
-            xh_h2x_parse_param(opts, 1, ax, items);
+            xh_parse_param(opts, 1, ax, items);
         } XCPT_TRY_END
 
         XCPT_CATCH
         {
-            xh_h2x_destroy(opts);
+            xh_destroy_opts(opts);
             XCPT_RETHROW;
         }
 
@@ -35,52 +33,48 @@ new(CLASS,...)
 SV *
 hash2xml(...)
     PREINIT:
-        xh_h2x_opts_t *opts = NULL;
-        xh_h2x_ctx_t   ctx;
-        SV         *p, *hash, *result;
-        xh_int_t    nparam    = 0;
+        xh_opts_t    *opts = NULL;
+        xh_h2x_ctx_t  ctx;
+        SV           *param, *hash, *result;
+        xh_int_t      nparam    = 0;
     CODE:
         /* get object reference */
         if (nparam >= items)
             croak("Invalid parameters");
-
-        p = ST(nparam);
-        if ( sv_isa(p, "XML::Hash::XS") ) {
-            /* reference to object */
-            IV tmp = SvIV((SV *) SvRV(p));
-            opts = INT2PTR(xh_h2x_opts_t *, tmp);
-            nparam++;
-        }
-        else if ( SvTYPE(p) == SVt_PV ) {
-            /* class name */
+        param = ST(nparam);
+        if ( sv_derived_from(param, "XML::Hash::XS") ) {
+            if ( sv_isobject(param) ) {
+                /* reference to object */
+                IV tmp = SvIV((SV *) SvRV(param));
+                opts = INT2PTR(xh_opts_t *, tmp);
+            }
             nparam++;
         }
 
         /* get hash reference */
         if (nparam >= items)
             croak("Invalid parameters");
-
-        p = ST(nparam);
-        if (SvROK(p) && SvTYPE(SvRV(p)) == SVt_PVHV) {
-            hash = p;
+        param = ST(nparam);
+        if (SvROK(param) && SvTYPE(SvRV(param)) == SVt_PVHV) {
+            hash = param;
             nparam++;
         }
         else {
             croak("Parameter is not hash reference");
         }
 
-        /* set options */
+        /* parse options */
         memset(&ctx, 0, sizeof(xh_h2x_ctx_t));
         if (opts == NULL) {
             /* read global options */
-            xh_h2x_init_opts(&ctx.opts);
+            xh_init_opts(&ctx.opts);
         }
         else {
             /* read options from object */
-            memcpy(&ctx.opts, opts, sizeof(xh_h2x_opts_t));
+            memcpy(&ctx.opts, opts, sizeof(xh_opts_t));
         }
         if (nparam < items) {
-            xh_h2x_parse_param(&ctx.opts, nparam, ax, items);
+            xh_parse_param(&ctx.opts, nparam, ax, items);
         }
 
         /* run */
@@ -109,8 +103,79 @@ hash2xml(...)
     OUTPUT:
         RETVAL
 
-void
-DESTROY(conv)
-        xh_h2x_opts_t *conv;
+SV *
+xml2hash(...)
+    PREINIT:
+        xh_opts_t     *opts = NULL;
+        xh_x2h_ctx_t   ctx;
+        SV            *param, *result, *input;
+        xh_int_t       nparam = 0;
     CODE:
-        xh_h2x_destroy(conv);
+        /* get object reference */
+        if (nparam >= items)
+            croak("Invalid parameters");
+        param = ST(nparam);
+        if ( sv_derived_from(param, "XML::Hash::XS") ) {
+            if ( sv_isobject(param) ) {
+                /* reference to object */
+                IV tmp = SvIV((SV *) SvRV(param));
+                opts = INT2PTR(xh_opts_t *, tmp);
+            }
+            nparam++;
+        }
+
+        /* get xml as string or file name */
+        if (nparam >= items)
+            croak("Invalid parameters");
+        param = ST(nparam);
+        if (SvROK(param))
+            param = SvRV(param);
+        if (!SvOK(param))
+            croak("Invalid parametesr");
+        if (SvTYPE(param) != SVt_PV && SvTYPE(param) != SVt_PVGV)
+            croak("Invalid parametesr");
+        input = param;
+        nparam++;
+
+        /* parse options */
+        memset(&ctx, 0, sizeof(xh_x2h_ctx_t));
+        if (opts == NULL) {
+            /* read global options */
+            xh_init_opts(&ctx.opts);
+        }
+        else {
+            /* read options from object */
+            memcpy(&ctx.opts, opts, sizeof(xh_opts_t));
+        }
+        if (nparam < items) {
+            xh_parse_param(&ctx.opts, nparam, ax, items);
+        }
+
+        ctx.nodes = malloc(sizeof(SV *) * ctx.opts.max_depth);
+        memset(ctx.nodes, 0, sizeof(SV *) * ctx.opts.max_depth);
+
+        result = xh_x2h(&ctx, input);
+
+        free(ctx.nodes);
+        if (ctx.tmp != NULL)
+            free(ctx.tmp);
+
+        if (ctx.opts.output != NULL) {
+            XSRETURN_UNDEF;
+        }
+
+        if (result == NULL) {
+            warn("Failed to convert");
+            XSRETURN_UNDEF;
+        }
+
+        RETVAL = result;
+
+    OUTPUT:
+        RETVAL
+
+void
+DESTROY(opts)
+        xh_opts_t *opts;
+    CODE:
+        xh_destroy_opts(opts);

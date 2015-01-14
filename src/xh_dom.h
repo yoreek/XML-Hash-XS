@@ -2,7 +2,6 @@
 #define _XH_DOM_H_
 
 #ifdef XH_HAVE_DOM
-#include <libxml/parser.h>
 #include "xh_config.h"
 #include "xh_core.h"
 
@@ -56,20 +55,20 @@ typedef DocProxyNode* DocProxyNodePtr;
 SV *x_PmmNodeToSv(xmlNodePtr node, ProxyNodePtr owner);
 
 XH_INLINE xmlNodePtr
-xh_dom_new_node(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, char *name, size_t name_len, SV *value, xh_bool_t raw)
+xh_dom_new_node(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, xh_char_t *name, size_t name_len, SV *value, xh_bool_t raw)
 {
-    char          *tmp;
-    char          *content;
+    xh_char_t     *tmp;
+    xh_char_t     *content;
     size_t         content_len;
     STRLEN         str_len;
-    char           ch;
+    xh_char_t      ch;
 
     if (value == NULL) {
-        content     = "";
+        content     = XH_EMPTY_STRING;
         content_len = 0;
     }
     else {
-        content     = SvPV(value, str_len);
+        content     = XH_CHAR_CAST SvPV(value, str_len);
         content_len = str_len;
     }
 
@@ -80,7 +79,7 @@ xh_dom_new_node(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, char *name, size_t name_
             croak("Memory allocation error");
         }
 
-        (void) strcpy(&tmp[1], name);
+        (void) xh_strcpy(&tmp[1], name);
 
         name    = tmp;
         name[0] = '_';
@@ -119,17 +118,17 @@ xh_dom_new_node(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, char *name, size_t name_
 XH_INLINE void
 xh_dom_new_content(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, SV *value)
 {
-    char          *content;
+    xh_char_t     *content;
     size_t         content_len;
     STRLEN         str_len;
-    char           ch;
+    xh_char_t      ch;
 
     if (value == NULL) {
-        content     = "";
+        content     = XH_EMPTY_STRING;
         content_len = 0;
     }
     else {
-        content     = SvPV(value, str_len);
+        content     = XH_CHAR_CAST SvPV(value, str_len);
         content_len = str_len;
     }
 
@@ -150,17 +149,17 @@ xh_dom_new_content(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, SV *value)
 XH_INLINE void
 xh_dom_new_comment(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, SV *value)
 {
-    char          *content;
+    xh_char_t     *content;
     size_t         content_len;
     STRLEN         str_len;
-    char           ch;
+    xh_char_t      ch;
 
     if (value == NULL) {
-        content     = "";
+        content     = XH_EMPTY_STRING;
         content_len = 0;
     }
     else {
-        content     = SvPV(value, str_len);
+        content     = XH_CHAR_CAST SvPV(value, str_len);
         content_len = str_len;
     }
 
@@ -181,16 +180,16 @@ xh_dom_new_comment(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, SV *value)
 XH_INLINE void
 xh_dom_new_cdata(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, SV *value)
 {
-    char          *content;
+    xh_char_t     *content;
     size_t         content_len;
     STRLEN         str_len;
 
     if (value == NULL) {
-        content     = "";
+        content     = XH_EMPTY_STRING;
         content_len = 0;
     }
     else {
-        content     = SvPV(value, str_len);
+        content     = XH_CHAR_CAST SvPV(value, str_len);
         content_len = str_len;
     }
 
@@ -202,17 +201,17 @@ xh_dom_new_cdata(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, SV *value)
 }
 
 XH_INLINE void
-xh_dom_new_attribute(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, char *name, size_t name_len, SV *value)
+xh_dom_new_attribute(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, xh_char_t *name, size_t name_len, SV *value)
 {
-    char          *content;
+    xh_char_t     *content;
     STRLEN         str_len;
-    char          *tmp;
+    xh_char_t     *tmp;
 
     if (value == NULL) {
         content     = NULL;
     }
     else {
-        content     = SvPV(value, str_len);
+        content     = XH_CHAR_CAST SvPV(value, str_len);
     }
 
     tmp = NULL;
@@ -222,7 +221,7 @@ xh_dom_new_attribute(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, char *name, size_t 
             croak("Memory allocation error");
         }
 
-        (void) strcpy(&tmp[1], name);
+        (void) xh_strcpy(&tmp[1], name);
 
         name    = tmp;
         name[0] = '_';

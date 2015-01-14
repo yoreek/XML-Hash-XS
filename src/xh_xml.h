@@ -4,17 +4,19 @@
 #include "xh_config.h"
 #include "xh_core.h"
 
-extern const char indent_string[60];
+static const xh_char_t indent_string[60] = "                                                            ";
 
 XH_INLINE void
-xh_xml_write_xml_declaration(xh_writer_t *writer, char *version, char *encoding)
+xh_xml_write_xml_declaration(xh_writer_t *writer, xh_char_t *version, xh_char_t *encoding)
 {
-    xh_buffer_t   *buf;
-    size_t         ver_len, enc_len;
+    xh_perl_buffer_t *buf;
+    size_t            ver_len, enc_len;
 
     buf     = &writer->main_buf;
-    ver_len = strlen(version);
-    enc_len = strlen(encoding);
+    ver_len = xh_strlen(version);
+    if (encoding[0] == '\0')
+        encoding = XH_CHAR_CAST XH_INTERNAL_ENCODING;
+    enc_len = xh_strlen(encoding);
 
     XH_WRITER_RESIZE_BUFFER(writer, buf, sizeof("<?xml version=\"\" encoding=\"\"?>\n") - 1 + ver_len * 6 + enc_len * 6)
 
@@ -27,15 +29,15 @@ xh_xml_write_xml_declaration(xh_writer_t *writer, char *version, char *encoding)
 }
 
 XH_INLINE void
-xh_xml_write_node(xh_writer_t *writer, char *name, size_t name_len, SV *value, xh_bool_t raw)
+xh_xml_write_node(xh_writer_t *writer, xh_char_t *name, size_t name_len, SV *value, xh_bool_t raw)
 {
-    size_t         indent_len;
-    xh_buffer_t   *buf;
-    char          *content;
-    STRLEN         content_len;
+    size_t            indent_len;
+    xh_perl_buffer_t *buf;
+    xh_char_t        *content;
+    STRLEN            content_len;
 
     buf     = &writer->main_buf;
-    content = SvPV(value, content_len);
+    content = XH_CHAR_CAST SvPV(value, content_len);
 
     if (writer->trim && content_len) {
         content = xh_str_trim(content, &content_len);
@@ -90,10 +92,10 @@ xh_xml_write_node(xh_writer_t *writer, char *name, size_t name_len, SV *value, x
 }
 
 XH_INLINE void
-xh_xml_write_empty_node(xh_writer_t *writer, char *name, size_t name_len)
+xh_xml_write_empty_node(xh_writer_t *writer, xh_char_t *name, size_t name_len)
 {
-    size_t       indent_len;
-    xh_buffer_t *buf;
+    size_t            indent_len;
+    xh_perl_buffer_t *buf;
 
     buf = &writer->main_buf;
 
@@ -129,10 +131,10 @@ xh_xml_write_empty_node(xh_writer_t *writer, char *name, size_t name_len)
 }
 
 XH_INLINE void
-xh_xml_write_start_node(xh_writer_t *writer, char *name, size_t name_len)
+xh_xml_write_start_node(xh_writer_t *writer, xh_char_t *name, size_t name_len)
 {
-    size_t       indent_len;
-    xh_buffer_t *buf;
+    size_t            indent_len;
+    xh_perl_buffer_t *buf;
 
     buf = &writer->main_buf;
 
@@ -168,10 +170,10 @@ xh_xml_write_start_node(xh_writer_t *writer, char *name, size_t name_len)
 }
 
 XH_INLINE void
-xh_xml_write_end_node(xh_writer_t *writer, char *name, size_t name_len)
+xh_xml_write_end_node(xh_writer_t *writer, xh_char_t *name, size_t name_len)
 {
-    size_t         indent_len;
-    xh_buffer_t   *buf;
+    size_t            indent_len;
+    xh_perl_buffer_t *buf;
 
     buf = &writer->main_buf;
 
@@ -210,13 +212,13 @@ XH_INLINE void
 xh_xml_write_content(xh_writer_t *writer, SV *value)
 {
     size_t         indent_len;
-    xh_buffer_t   *buf;
-    char          *content;
-    size_t         content_len;
-    STRLEN         str_len;
+    xh_perl_buffer_t *buf;
+    xh_char_t        *content;
+    size_t            content_len;
+    STRLEN            str_len;
 
     buf         = &writer->main_buf;
-    content     = SvPV(value, str_len);
+    content     = XH_CHAR_CAST SvPV(value, str_len);
     content_len = str_len;
 
     if (writer->trim) {
@@ -248,19 +250,19 @@ XH_INLINE void
 xh_xml_write_comment(xh_writer_t *writer, SV *value)
 {
     size_t         indent_len;
-    xh_buffer_t   *buf;
-    char          *content;
-    size_t         content_len;
-    STRLEN         str_len;
+    xh_perl_buffer_t *buf;
+    xh_char_t        *content;
+    size_t            content_len;
+    STRLEN            str_len;
 
     buf = &writer->main_buf;
 
     if (value == NULL) {
-        content     = "";
+        content     = XH_EMPTY_STRING;
         content_len = 0;
     }
     else {
-        content     = SvPV(value, str_len);
+        content     = XH_CHAR_CAST SvPV(value, str_len);
         content_len = str_len;
     }
 
@@ -296,20 +298,20 @@ xh_xml_write_comment(xh_writer_t *writer, SV *value)
 XH_INLINE void
 xh_xml_write_cdata(xh_writer_t *writer, SV *value)
 {
-    size_t         indent_len;
-    xh_buffer_t   *buf;
-    char          *content;
-    size_t         content_len;
-    STRLEN         str_len;
+    size_t            indent_len;
+    xh_perl_buffer_t *buf;
+    xh_char_t        *content;
+    size_t            content_len;
+    STRLEN            str_len;
 
     buf = &writer->main_buf;
 
     if (value == NULL) {
-        content     = "";
+        content     = XH_EMPTY_STRING;
         content_len = 0;
     }
     else {
-        content     = SvPV(value, str_len);
+        content     = XH_CHAR_CAST SvPV(value, str_len);
         content_len = str_len;
     }
 
@@ -343,10 +345,10 @@ xh_xml_write_cdata(xh_writer_t *writer, SV *value)
 }
 
 XH_INLINE void
-xh_xml_write_start_tag(xh_writer_t *writer, char *name, size_t name_len)
+xh_xml_write_start_tag(xh_writer_t *writer, xh_char_t *name, size_t name_len)
 {
-    size_t       indent_len;
-    xh_buffer_t *buf;
+    size_t            indent_len;
+    xh_perl_buffer_t *buf;
 
     buf = &writer->main_buf;
 
@@ -378,7 +380,7 @@ xh_xml_write_start_tag(xh_writer_t *writer, char *name, size_t name_len)
 XH_INLINE void
 xh_xml_write_end_tag(xh_writer_t *writer)
 {
-    xh_buffer_t *buf;
+    xh_perl_buffer_t *buf;
 
     buf = &writer->main_buf;
 
@@ -396,7 +398,7 @@ xh_xml_write_end_tag(xh_writer_t *writer)
 XH_INLINE void
 xh_xml_write_closed_end_tag(xh_writer_t *writer)
 {
-    xh_buffer_t *buf;
+    xh_perl_buffer_t *buf;
 
     buf = &writer->main_buf;
 
@@ -411,21 +413,21 @@ xh_xml_write_closed_end_tag(xh_writer_t *writer)
 }
 
 XH_INLINE void
-xh_xml_write_attribute(xh_writer_t *writer, char *name, size_t name_len, SV *value)
+xh_xml_write_attribute(xh_writer_t *writer, xh_char_t *name, size_t name_len, SV *value)
 {
-    xh_buffer_t   *buf;
-    char          *content;
-    size_t         content_len;
-    STRLEN         str_len;
+    xh_perl_buffer_t *buf;
+    xh_char_t        *content;
+    size_t            content_len;
+    STRLEN            str_len;
 
     buf = &writer->main_buf;
 
     if (value == NULL) {
-        content     = "";
+        content     = XH_EMPTY_STRING;
         content_len = 0;
     }
     else {
-        content     = SvPV(value, str_len);
+        content     = XH_CHAR_CAST SvPV(value, str_len);
         content_len = str_len;
     }
 

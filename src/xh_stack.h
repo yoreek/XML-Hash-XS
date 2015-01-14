@@ -20,13 +20,13 @@ xh_stack_push(xh_stack_t *st)
             croak("Memory allocation error");
         }
     }
-    return (void *) ((u_char *) st->elts + st->top++ * st->size);
+    return (void *) (XH_CHAR_CAST st->elts + st->top++ * st->size);
 }
 
 XH_INLINE void *
 xh_stack_pop(xh_stack_t *st)
 {
-    return st->top == 0 ? NULL : (void *) ((u_char *) st->elts + --st->top * st->size);
+    return st->top == 0 ? NULL : (void *) (XH_CHAR_CAST st->elts + --st->top * st->size);
 }
 
 XH_INLINE xh_bool_t

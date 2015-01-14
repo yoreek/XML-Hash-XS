@@ -4,7 +4,7 @@
 static int
 xh_sort_hash_cmp(const void *p1, const void *p2)
 {
-    return strcmp(((xh_sort_hash_t *) p1)->key, ((xh_sort_hash_t *) p2)->key);
+    return xh_strcmp(((xh_sort_hash_t *) p1)->key, ((xh_sort_hash_t *) p2)->key);
 }
 
 xh_sort_hash_t *
@@ -21,7 +21,7 @@ xh_sort_hash(HV *hash, size_t len)
     hv_iterinit(hash);
 
     for (i = 0; i < len; i++) {
-        sorted_hash[i].value = hv_iternextsv(hash, &sorted_hash[i].key, &sorted_hash[i].key_len);
+        sorted_hash[i].value = hv_iternextsv(hash, (char **) &sorted_hash[i].key, &sorted_hash[i].key_len);
     }
 
     qsort(sorted_hash, len, sizeof(xh_sort_hash_t), xh_sort_hash_cmp);

@@ -5,7 +5,7 @@
 #include "xh_core.h"
 
 typedef struct {
-    char             *key;
+    xh_char_t        *key;
     I32               key_len;
     void             *value;
 } xh_sort_hash_t;

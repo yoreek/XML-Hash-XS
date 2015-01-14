@@ -2,19 +2,19 @@
 #include "xh_core.h"
 
 xh_int_t
-xh_h2x_native_attr(xh_h2x_ctx_t *ctx, char *key, I32 key_len, SV *value, xh_int_t flag)
+xh_h2x_native_attr(xh_h2x_ctx_t *ctx, xh_char_t *key, I32 key_len, SV *value, xh_int_t flag)
 {
     xh_uint_t       type;
     size_t          len, i, nattrs, done;
     xh_sort_hash_t *sorted_hash;
     SV             *item_value;
-    char           *item;
+    xh_char_t      *item;
     I32             item_len;
     GV             *method;
 
     nattrs = 0;
 
-    if (ctx->opts.content[0] != '\0' && strcmp(key, ctx->opts.content) == 0)
+    if (ctx->opts.content[0] != '\0' && xh_strcmp(key, ctx->opts.content) == 0)
         flag = flag | XH_H2X_F_CONTENT;
 
     value = xh_h2x_resolve_value(ctx, value, &type);
@@ -23,7 +23,7 @@ xh_h2x_native_attr(xh_h2x_ctx_t *ctx, char *key, I32 key_len, SV *value, xh_int_
         if (!(flag & XH_H2X_F_COMPLEX)) goto FINISH;
 
         while (1) {
-            item_value = xh_h2x_call_method(value, method, "iternext");
+            item_value = xh_h2x_call_method(value, method, XH_CHAR_CAST "iternext");
             if (!SvOK(item_value)) break;
             (void) xh_h2x_native_attr(ctx, key, key_len, item_value, XH_H2X_F_SIMPLE | XH_H2X_F_COMPLEX);
             SvREFCNT_dec(item_value);
@@ -35,13 +35,13 @@ xh_h2x_native_attr(xh_h2x_ctx_t *ctx, char *key, I32 key_len, SV *value, xh_int_
 
     if (type & XH_H2X_T_SCALAR) {
         if (flag & XH_H2X_F_COMPLEX && (flag & XH_H2X_F_SIMPLE || type & XH_H2X_T_RAW)) {
-            xh_xml_write_node(ctx->writer, key, key_len, value, type & XH_H2X_T_RAW);
+            xh_xml_write_node(&ctx->writer, key, key_len, value, type & XH_H2X_T_RAW);
         }
         else if (flag & XH_H2X_F_COMPLEX && flag & XH_H2X_F_CONTENT) {
-            xh_xml_write_content(ctx->writer, value);
+            xh_xml_write_content(&ctx->writer, value);
         }
         else if (flag & XH_H2X_F_SIMPLE && !(flag & XH_H2X_F_CONTENT) && !(type & XH_H2X_T_RAW)) {
-            xh_xml_write_attribute(ctx->writer, key, key_len, value);
+            xh_xml_write_attribute(&ctx->writer, key, key_len, value);
             nattrs++;
         }
     }
@@ -50,11 +50,11 @@ xh_h2x_native_attr(xh_h2x_ctx_t *ctx, char *key, I32 key_len, SV *value, xh_int_
 
         len = HvUSEDKEYS((SV *) value);
         if (len == 0) {
-            xh_xml_write_empty_node(ctx->writer, key, key_len);
+            xh_xml_write_empty_node(&ctx->writer, key, key_len);
             goto FINISH;
         }
 
-        xh_xml_write_start_tag(ctx->writer, key, key_len);
+        xh_xml_write_start_tag(&ctx->writer, key, key_len);
 
         done = 0;
 
@@ -66,38 +66,38 @@ xh_h2x_native_attr(xh_h2x_ctx_t *ctx, char *key, I32 key_len, SV *value, xh_int_
             }
 
             if (done == len) {
-                xh_xml_write_closed_end_tag(ctx->writer);
+                xh_xml_write_closed_end_tag(&ctx->writer);
             }
             else {
-                xh_xml_write_end_tag(ctx->writer);
+                xh_xml_write_end_tag(&ctx->writer);
 
                 for (i = 0; i < len; i++) {
                     (void) xh_h2x_native_attr(ctx, sorted_hash[i].key, sorted_hash[i].key_len, sorted_hash[i].value, XH_H2X_F_COMPLEX);
                 }
 
-                xh_xml_write_end_node(ctx->writer, key, key_len);
+                xh_xml_write_end_node(&ctx->writer, key, key_len);
             }
 
             free(sorted_hash);
         }
         else {
             hv_iterinit((HV *) value);
-            while ((item_value = hv_iternextsv((HV *) value, &item, &item_len))) {
+            while ((item_value = hv_iternextsv((HV *) value, (char **) &item, &item_len))) {
                 done += xh_h2x_native_attr(ctx, item, item_len,item_value, XH_H2X_F_SIMPLE);
             }
 
             if (done == len) {
-                xh_xml_write_closed_end_tag(ctx->writer);
+                xh_xml_write_closed_end_tag(&ctx->writer);
             }
             else {
-                xh_xml_write_end_tag(ctx->writer);
+                xh_xml_write_end_tag(&ctx->writer);
 
                 hv_iterinit((HV *) value);
-                while ((item_value = hv_iternextsv((HV *) value, &item, &item_len))) {
+                while ((item_value = hv_iternextsv((HV *) value, (char **) &item, &item_len))) {
                     (void) xh_h2x_native_attr(ctx, item, item_len,item_value, XH_H2X_F_COMPLEX);
                 }
 
-                xh_xml_write_end_node(ctx->writer, key, key_len);
+                xh_xml_write_end_node(&ctx->writer, key, key_len);
             }
         }
 
@@ -115,10 +115,10 @@ xh_h2x_native_attr(xh_h2x_ctx_t *ctx, char *key, I32 key_len, SV *value, xh_int_
     }
     else {
         if (flag & XH_H2X_F_SIMPLE && flag & XH_H2X_F_COMPLEX) {
-            xh_xml_write_empty_node(ctx->writer, key, key_len);
+            xh_xml_write_empty_node(&ctx->writer, key, key_len);
         }
         else if (flag & XH_H2X_F_SIMPLE && !(flag & XH_H2X_F_CONTENT)) {
-            xh_xml_write_attribute(ctx->writer, key, key_len, NULL);
+            xh_xml_write_attribute(&ctx->writer, key, key_len, NULL);
             nattrs++;
         }
     }
@@ -131,19 +131,19 @@ FINISH:
 
 #ifdef XH_HAVE_DOM
 xh_int_t
-xh_h2d_native_attr(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, char *key, I32 key_len, SV *value, xh_int_t flag)
+xh_h2d_native_attr(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, xh_char_t *key, I32 key_len, SV *value, xh_int_t flag)
 {
     xh_uint_t       type;
     size_t          len, i, nattrs, done;
     xh_sort_hash_t *sorted_hash;
     SV             *item_value;
-    char           *item;
+    xh_char_t      *item;
     I32             item_len;
     GV             *method;
 
     nattrs = 0;
 
-    if (ctx->opts.content[0] != '\0' && strcmp(key, ctx->opts.content) == 0)
+    if (ctx->opts.content[0] != '\0' && xh_strcmp(key, ctx->opts.content) == 0)
         flag = flag | XH_H2X_F_CONTENT;
 
     value = xh_h2x_resolve_value(ctx, value, &type);
@@ -153,7 +153,7 @@ xh_h2d_native_attr(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, char *key, I32 key_le
         if (!(flag & XH_H2X_F_COMPLEX)) goto FINISH;
 
         while (1) {
-            item_value = xh_h2x_call_method(value, method, "iternext");
+            item_value = xh_h2x_call_method(value, method, XH_CHAR_CAST "iternext");
             if (!SvOK(item_value)) break;
             (void) xh_h2d_native_attr(ctx, rootNode, key, key_len, item_value, XH_H2X_F_SIMPLE | XH_H2X_F_COMPLEX);
             SvREFCNT_dec(item_value);
@@ -203,13 +203,13 @@ xh_h2d_native_attr(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, char *key, I32 key_le
         }
         else {
             hv_iterinit((HV *) value);
-            while ((item_value = hv_iternextsv((HV *) value, &item, &item_len))) {
+            while ((item_value = hv_iternextsv((HV *) value, (char **) &item, &item_len))) {
                 done += xh_h2d_native_attr(ctx, rootNode, item, item_len,item_value, XH_H2X_F_SIMPLE);
             }
 
             if (done != len) {
                 hv_iterinit((HV *) value);
-                while ((item_value = hv_iternextsv((HV *) value, &item, &item_len))) {
+                while ((item_value = hv_iternextsv((HV *) value, (char **) &item, &item_len))) {
                     (void) xh_h2d_native_attr(ctx, rootNode, item, item_len,item_value, XH_H2X_F_COMPLEX);
                 }
             }

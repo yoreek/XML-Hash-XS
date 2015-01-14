@@ -20,7 +20,7 @@ use Cwd;
 
 $| = 0;
 
-our (%PARAMS, $DEVNULL, $is_Win32, $DEBUG, %LIBS_AVAILABLE);
+our (%PARAMS, $DEVNULL, $is_Win32, $DEBUG, $TRACE, %LIBS_AVAILABLE);
 
 our @COMMON_LIB_PATH = (
     '/usr/lib',
@@ -145,6 +145,7 @@ WriteMakefile(
     MIN_PERL_VERSION => 5.008008,
     PREREQ_PM        => {
         'Test::More'   => 0,
+        'Data::Dumper' => 0,
     },
     CCFLAGS          => $Config{ccflags} . ' -o $@',
     OBJECT           => join(' ', '$(BASEEXT)$(OBJ_EXT)', map { s/\.c$/\$(OBJ_EXT)/; $_ } glob('src/*.c')),
@@ -210,8 +211,10 @@ sub generate_config {
 
     # CCFLAGS
     $summary_config{CCFLAGS}  = ( $Config{ccflags} || '' ) . ' -o $@';
-    $summary_config{CCFLAGS} .= ' -g -Wall -Werror -pedantic -std=c99 -DPERL_GCC_PEDANTIC -O0'
+    $summary_config{CCFLAGS} .= ' -g -Wall -Werror -pedantic -std=c99 -DPERL_GCC_PEDANTIC -DWITH_DEBUG -O0'
         if $DEBUG;
+    $summary_config{CCFLAGS} .= ' -DWITH_TRACE'
+        if $DEBUG && $TRACE;
 
     return %summary_config;
 }
@@ -297,7 +300,7 @@ sub parse_params {
         if ($@) { $DEVNULL = '/dev/null' }
     }
 
-    @PARAMS{qw(DEBUG DEFINE INC LIBS XMLPREFIX NO_THREADS LDFLAGS)} = ();
+    @PARAMS{qw(DEBUG TRACE DEFINE INC LIBS XMLPREFIX NO_THREADS LDFLAGS)} = ();
 
     @ARGV = grep {
         my ($key, $val) = split(/=/, $_, 2);
@@ -308,6 +311,8 @@ sub parse_params {
 
     # switch Debugging messages on
     $DEBUG = delete $PARAMS{DEBUG};
+
+    $TRACE = delete $PARAMS{TRACE};
 
     if ( $DEBUG and $is_Win32 ) {
         warn "win32 compile\n";

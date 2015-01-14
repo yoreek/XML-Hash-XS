@@ -1,5 +1,8 @@
 Revision history for XML::Hash::XS.
 
+0.27    2015-01-14
+        Feature: conversion of xml to hash
+
 0.26    2014-03-13
         Fixbug: compilation failure on some OS
         Fixbug: compilation failure when using libiconv with MinGW

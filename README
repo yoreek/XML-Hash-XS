@@ -5,20 +5,28 @@ SYNOPSIS
         use XML::Hash::XS;
 
         my $xmlstr = hash2xml \%hash;
-        hash2xml \%hash, output => $FH;
+        hash2xml \%hash, output => $fh;
+
+        my $hash = xml2hash $xmlstr;
+        my $hash = xml2hash \$xmlstr;
+        my $hash = xml2hash 'test.xml', encoding => 'cp1251';
+        my $hash = xml2hash $fh;
+        my $hash = xml2hash *STDIN;
 
     Or OOP way:
 
         use XML::Hash::XS qw();
 
-        my $conv = XML::Hash::XS->new([<options>])
-        my $xmlstr = $conv->hash2xml(\%hash, [<options>]);
+        my $conv   = XML::Hash::XS->new(utf8 => 0, encoding => 'utf8')
+        my $xmlstr = $conv->hash2xml(\%hash, utf8 => 1);
+        my $hash   = $conv->xml2hash($xmlstr, encoding => 'cp1251');
 
 DESCRIPTION
-    This module implements simple hash to XML conversion written in C.
+    This module implements simple hash to XML and XML to hash conversion
+    written in C.
 
-    During conversion uses minimum of memory, XML is generated as string or
-    written directly to output file without building DOM.
+    During conversion uses minimum of memory, XML or hash is written
+    directly without building DOM.
 
     Some features are optional and are available with appropriate libraries:
 
@@ -83,27 +91,42 @@ FUNCTIONS
           <node5 node51="value51"/>
         </root>
 
+  xml2hash $xml, [ %options ]
+    $xml may be string, reference to string, file handle or tied file
+    handle:
+
+        xml2hash '<root>text</root>';
+        # output: 'text'
+
+        xml2hash '<root a="1" b="2">text</root>';
+        # output: { a => '1', b => '2', content => 'text' }
+
+        open(my $fh, '<', 'test.xml');
+        xml2hash $fh;
+
+        xml2hash *STDIN;
+
 OPTIONS
-    doc [ => 0 ]
+    doc [ => 0 ] *# hash2xml*
         if doc is '1', then returned value is XML::LibXML::Document.
 
-    root [ = 'root' ]
+    root [ = 'root' ] *# hash2xml*
         Root node name.
 
-    version [ = '1.0' ]
+    version [ = '1.0' ] *# hash2xml*
         XML document version
 
-    encoding [ = 'utf-8' ]
-        XML output encoding
+    encoding [ = 'utf-8' ] *# hash2xml+xml2hash*
+        XML input/output encoding
 
-    indent [ = 0 ]
+    indent [ = 0 ] *# hash2xml*
         if indent great than "0", XML output should be indented according to
         its hierarchic structure. This value determines the number of
         spaces.
 
         if indent is "0", XML output will all be on one line.
 
-    output [ = undef ]
+    output [ = undef ] *# hash2xml*
         XML output method
 
         if output is undefined, XML document dumped into string.
@@ -111,30 +134,42 @@ OPTIONS
         if output is FH, XML document writes directly to a filehandle or a
         stream.
 
-    canonical [ = 0 ]
+    canonical [ = 0 ] *# hash2xml*
         if canonical is "1", converter will be write hashes sorted by key.
 
         if canonical is "0", order of the element will be pseudo-randomly.
 
-    use_attr [ = 0 ]
+    use_attr [ = 0 ] *# hash2xml*
         if use_attr is "1", converter will be use the attributes.
 
         if use_attr is "0", converter will be use tags only.
 
-    content [ = undef ]
+    content [ = undef ] *# hash2xml*
         if defined that the key name for the text content(used only if
         use_attr=1).
 
-    xml_decl [ = 1 ]
+    xml_decl [ = 1 ] *# hash2xml*
         if xml_decl is "1", output will start with the XML declaration
         '<?xml version="1.0" encoding="utf-8"?>'.
 
         if xml_decl is "0", XML declaration will not be output.
 
-    trim [ = 1 ]
-        Trim leading and trailing whitespace from text nodes
+    trim [ = 1 ] *# hash2xml*
+        Trim leading and trailing whitespace from text nodes.
 
-    method [ = 'NATIVE' ]
+    utf8 [ = 1 ] *# hash2xml+xml2hash*
+        Turn on utf8 flag for strings if enabled.
+
+    max_depth [ = 1024 ] *# xml2hash*
+        Maximum recursion depth.
+
+    buf_size [ = 4096 ] *# hash2xml+xml2hash*
+        Buffer size for reading end encoding data.
+
+    keep_root [ = 0 ] *# xml2hash*
+        Keep root element.
+
+    method [ = 'NATIVE' ] *# hash2xml*
         experimental support the conversion methods other libraries
 
         if method is 'LX' then conversion result is the same as using
@@ -143,7 +178,7 @@ OPTIONS
         Note: for 'LX' method following additional options are available:
         attr cdata text comm
 
-OBJECT_SERIALISATION
+OBJECT_SERIALISATION(hash2xml)
     1. When object has a "toString" method
       In this case, the <toString> method of object is invoked in scalar
       context. It must return a single scalar that can be directly encoded
@@ -194,7 +229,7 @@ OBJECT_SERIALISATION
           </root>
 
 BENCHMARK
-    Performance benchmark in comparison with some popular modules:
+    Performance benchmark in comparison with some popular modules(hash2xml):
 
                         Rate     XML::Hash XML::Hash::LX   XML::Simple XML::Hash::XS
         XML::Hash     65.0/s            --           -6%          -37%          -99%
@@ -208,7 +243,7 @@ AUTHOR
     Yuriy Ustushenko, <yoreek@yahoo.com>
 
 COPYRIGHT AND LICENSE
-    Copyright (C) 2013 Yuriy Ustushenko
+    Copyright (C) 2012-2015 Yuriy Ustushenko
 
     This library is free software; you can redistribute it and/or modify it
     under the same terms as Perl itself.

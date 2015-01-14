@@ -8,39 +8,43 @@ use warnings;
 use vars qw($VERSION @EXPORT @EXPORT_OK);
 
 use base 'Exporter';
-@EXPORT_OK = @EXPORT = qw( hash2xml );
+@EXPORT_OK = @EXPORT = qw( hash2xml xml2hash );
 
-$VERSION = '0.26';
+$VERSION = '0.27';
 
 require XSLoader;
 XSLoader::load('XML::Hash::XS', $VERSION);
 
-use vars qw($method $output $root $version $encoding $indent $canonical
-    $use_attr $content $xml_decl $doc $max_depth $attr $text $trim $cdata $comm
+use vars qw($method $output $root $version $encoding $utf8 $indent $canonical
+    $use_attr $content $xml_decl $doc $max_depth $attr $text $trim $cdata
+    $comm $buf_size $keep_root
 );
 
 # 'NATIVE' or 'LX'
 our $method    = 'NATIVE';
 
 # native options
-$output    = undef;
-$root      = 'root';
-$version   = '1.0';
-$encoding  = 'utf-8';
-$indent    = 0;
-$canonical = 0;
-$use_attr  = 0;
-$content   = undef;
-$xml_decl  = 1;
-$doc       = 0;
-$max_depth = 1024;
-$trim      = 0;
+$output     = undef;
+$root       = 'root';
+$version    = '1.0';
+$encoding   = '';
+$utf8       = 1;
+$indent     = 0;
+$canonical  = 0;
+$use_attr   = 0;
+$content    = undef;
+$xml_decl   = 1;
+$keep_root  = 0;#
+$doc        = 0;
+$max_depth  = 1024;
+$buf_size   = 4096;
+$trim       = 0;
 
 # XML::Hash::LX options
-$attr      = '-';
-$text      = '#text';
-$cdata     = undef;
-$comm      = undef;
+$attr       = '-';
+$text       = '#text';
+$cdata      = undef;
+$comm       = undef;
 
 1;
 __END__
@@ -53,20 +57,27 @@ XML::Hash::XS - Simple and fast hash to XML conversion written in C
     use XML::Hash::XS;
 
     my $xmlstr = hash2xml \%hash;
-    hash2xml \%hash, output => $FH;
+    hash2xml \%hash, output => $fh;
+
+    my $hash = xml2hash $xmlstr;
+    my $hash = xml2hash \$xmlstr;
+    my $hash = xml2hash 'test.xml', encoding => 'cp1251';
+    my $hash = xml2hash $fh;
+    my $hash = xml2hash *STDIN;
 
 Or OOP way:
 
     use XML::Hash::XS qw();
 
-    my $conv = XML::Hash::XS->new([<options>])
-    my $xmlstr = $conv->hash2xml(\%hash, [<options>]);
+    my $conv   = XML::Hash::XS->new(utf8 => 0, encoding => 'utf8')
+    my $xmlstr = $conv->hash2xml(\%hash, utf8 => 1);
+    my $hash   = $conv->xml2hash($xmlstr, encoding => 'cp1251');
 
 =head1 DESCRIPTION
 
-This module implements simple hash to XML conversion written in C.
+This module implements simple hash to XML and XML to hash conversion written in C.
 
-During conversion uses minimum of memory, XML is generated as string or written directly to output file without building DOM.
+During conversion uses minimum of memory, XML or hash is written directly without building DOM.
 
 Some features are optional and are available with appropriate libraries:
 
@@ -137,34 +148,49 @@ will convert to:
     </root>
 
 
+=head2 xml2hash $xml, [ %options ]
+
+$xml may be string, reference to string, file handle or tied file handle:
+
+    xml2hash '<root>text</root>';
+    # output: 'text'
+
+    xml2hash '<root a="1" b="2">text</root>';
+    # output: { a => '1', b => '2', content => 'text' }
+
+    open(my $fh, '<', 'test.xml');
+    xml2hash $fh;
+
+    xml2hash *STDIN;
+
 =head1 OPTIONS
 
 =over 4
 
-=item doc [ => 0 ]
+=item doc [ => 0 ] I<# hash2xml>
 
 if doc is '1', then returned value is L<XML::LibXML::Document>.
 
-=item root [ = 'root' ]
+=item root [ = 'root' ] I<# hash2xml>
 
 Root node name.
 
-=item version [ = '1.0' ]
+=item version [ = '1.0' ] I<# hash2xml>
 
 XML document version
 
-=item encoding [ = 'utf-8' ]
+=item encoding [ = 'utf-8' ] I<# hash2xml+xml2hash>
 
-XML output encoding
+XML input/output encoding
 
-=item indent [ = 0 ]
+=item indent [ = 0 ] I<# hash2xml>
 
 if indent great than "0", XML output should be indented according to its hierarchic structure.
 This value determines the number of spaces.
 
 if indent is "0", XML output will all be on one line.
 
-=item output [ = undef ]
+=item output [ = undef ] I<# hash2xml>
 
 XML output method
 
@@ -172,33 +198,49 @@ if output is undefined, XML document dumped into string.
 
 if output is FH, XML document writes directly to a filehandle or a stream.
 
-=item canonical [ = 0 ]
+=item canonical [ = 0 ] I<# hash2xml>
 
 if canonical is "1", converter will be write hashes sorted by key.
 
 if canonical is "0", order of the element will be pseudo-randomly.
 
-=item use_attr [ = 0 ]
+=item use_attr [ = 0 ] I<# hash2xml>
 
 if use_attr is "1", converter will be use the attributes.
 
 if use_attr is "0", converter will be use tags only.
 
-=item content [ = undef ]
+=item content [ = undef ] I<# hash2xml>
 
 if defined that the key name for the text content(used only if use_attr=1).
 
-=item xml_decl [ = 1 ]
+=item xml_decl [ = 1 ] I<# hash2xml>
 
 if xml_decl is "1", output will start with the XML declaration '<?xml version="1.0" encoding="utf-8"?>'.
 
 if xml_decl is "0", XML declaration will not be output.
 
-=item trim [ = 1 ]
+=item trim [ = 1 ] I<# hash2xml>
 
-Trim leading and trailing whitespace from text nodes
+Trim leading and trailing whitespace from text nodes.
 
-=item method [ = 'NATIVE' ]
+=item utf8 [ = 1 ] I<# hash2xml+xml2hash>
+
+Turn on utf8 flag for strings if enabled.
+
+=item max_depth [ = 1024 ] I<# xml2hash>
+
+Maximum recursion depth.
+
+=item buf_size [ = 4096 ] I<# hash2xml+xml2hash>
+
+Buffer size for reading end encoding data.
+
+=item keep_root [ = 0 ] I<# xml2hash>
+
+Keep root element.
+
+=item method [ = 'NATIVE' ] I<# hash2xml>
 
 experimental support the conversion methods other libraries
 
@@ -212,7 +254,7 @@ Note: for 'LX' method following additional options are available:
 
 =back
 
-=head1 OBJECT_SERIALISATION
+=head1 OBJECT_SERIALISATION(hash2xml)
 
 =over 2
 
@@ -268,7 +310,7 @@ This can be used to generate a large XML using minimum memory, example with DBI:
 
 =head1 BENCHMARK
 
-Performance benchmark in comparison with some popular modules:
+Performance benchmark in comparison with some popular modules(hash2xml):
 
                     Rate     XML::Hash XML::Hash::LX   XML::Simple XML::Hash::XS
     XML::Hash     65.0/s            --           -6%          -37%          -99%
@@ -284,7 +326,7 @@ Yuriy Ustushenko, E<lt>yoreek@yahoo.comE<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2013 Yuriy Ustushenko
+Copyright (C) 2012-2015 Yuriy Ustushenko
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
