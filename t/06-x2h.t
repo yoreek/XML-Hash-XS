@@ -304,7 +304,7 @@ sub READ {
         $len = $self->{len} - $self->{pos};
     }
     if ($len > 0) {
-        substr($$bufref, $offset, $len) = substr($self->{str}, $self->{pos}, $len);
+        $$bufref = substr($$bufref, 0, $offset) . substr($self->{str}, $self->{pos}, $len);
         $self->{pos} += $len;
     }
     return $len;

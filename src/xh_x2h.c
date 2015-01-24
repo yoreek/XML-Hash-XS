@@ -734,12 +734,12 @@ xh_x2h(xh_x2h_ctx_t *ctx, SV *input)
     HV *hv = newHV();
     SV *result;
 
-    result = ctx->hash = newRV_noinc( (SV *) hv );
-    ctx->nodes[0] = ctx->lval = &ctx->hash;
-
     dXCPT;
     XCPT_TRY_START
     {
+        result = ctx->hash = newRV_noinc( (SV *) hv );
+        ctx->nodes[0] = ctx->lval = &ctx->hash;
+
         xh_reader_init(&ctx->reader, input, ctx->opts.encoding, ctx->opts.buf_size);
 
         xh_x2h_parse(ctx, &ctx->reader);

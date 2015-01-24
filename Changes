@@ -1,5 +1,9 @@
 Revision history for XML::Hash::XS.
 
+0.28    2015-01-14
+        Fixbug: test for tied handle
+        Fixbug: compilation failure on Haiku OS
+
 0.27    2015-01-14
         Feature: conversion of xml to hash
 
