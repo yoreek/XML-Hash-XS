@@ -1,5 +1,8 @@
 Revision history for XML::Hash::XS.
 
+0.29    2015-01-30
+        Fixbug: segmentation fault on test for tied handle
+
 0.28    2015-01-14
         Fixbug: test for tied handle
         Fixbug: compilation failure on Haiku OS

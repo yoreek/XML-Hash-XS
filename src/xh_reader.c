@@ -115,8 +115,8 @@ xh_string_reader_read_with_encoding(xh_reader_t *reader, xh_char_t **buf, xh_cha
         *off = preserve - enc_buf->start;
         xh_log_debug1("off: %lu", *off);
         if (*off) {
-            xh_log_debug3("memmove dest: %p src %p size: %lu", enc_buf->start, preserve, enc_buf->cur - enc_buf->start);
-            xh_memmove(enc_buf->start, preserve, enc_buf->cur - enc_buf->start);
+            xh_log_debug3("memmove dest: %p src %p size: %lu", enc_buf->start, preserve, enc_buf->end - preserve);
+            xh_memmove(enc_buf->start, preserve, enc_buf->end - preserve);
         }
         enc_buf->cur -= *off;
     }
@@ -320,8 +320,8 @@ xh_file_reader_read(xh_reader_t *reader, xh_char_t **buf, xh_char_t *preserve, s
         *off = preserve - main_buf->start;
         xh_log_debug1("off: %lu", *off);
         if (*off) {
-            xh_log_debug3("memmove dest: %p src %p size: %lu", main_buf->start, preserve, main_buf->cur - main_buf->start);
-            xh_memmove(main_buf->start, preserve, main_buf->cur - main_buf->start);
+            xh_log_debug3("memmove dest: %p src %p size: %lu", main_buf->start, preserve, main_buf->end - preserve);
+            xh_memmove(main_buf->start, preserve, main_buf->end - preserve);
         }
         main_buf->cur -= *off;
         xh_log_debug1("read cur: %p", main_buf->cur);
@@ -367,8 +367,8 @@ xh_file_reader_read_with_encoding(xh_reader_t *reader, xh_char_t **buf, xh_char_
         *off = preserve - enc_buf->start;
         xh_log_debug1("off: %lu", *off);
         if (*off) {
-            xh_log_debug3("memmove dest: %p src %p size: %lu", enc_buf->start, preserve, enc_buf->cur - enc_buf->start);
-            xh_memmove(enc_buf->start, preserve, enc_buf->cur - enc_buf->start);
+            xh_log_debug3("memmove dest: %p src %p size: %lu", enc_buf->start, preserve, enc_buf->end - preserve);
+            xh_memmove(enc_buf->start, preserve, enc_buf->end - preserve);
         }
         enc_buf->cur -= *off;
     }
@@ -533,23 +533,27 @@ xh_perl_obj_reader_read(xh_reader_t *reader, xh_char_t **buf, xh_char_t *preserv
         *off = preserve - main_buf->start;
         xh_log_debug1("off: %lu", *off);
         if (*off) {
-            xh_log_debug3("memmove dest: %p src %p size: %lu", main_buf->start, preserve, main_buf->cur - main_buf->start);
-            xh_memmove(main_buf->start, preserve, main_buf->cur - main_buf->start);
+            xh_log_debug3("memmove dest: %p src %p size: %lu", main_buf->start, preserve, main_buf->end - preserve);
+            xh_memmove(main_buf->start, preserve, main_buf->end - preserve);
         }
         main_buf->cur -= *off;
         xh_log_debug1("read cur: %p", main_buf->cur);
     }
 
-    old_buf_addr = main_buf->start;
+    {
+        old_buf_addr = main_buf->start;
 
-    xh_perl_buffer_grow50(main_buf);
+        xh_perl_buffer_grow50(main_buf);
 
-    if (preserve != NULL && main_buf->start != old_buf_addr) {
-        *off += old_buf_addr - main_buf->start;
+        len = xh_perl_obj_read(reader->perl_obj, main_buf->scalar, xh_perl_buffer_avail(main_buf), main_buf->cur - main_buf->start);
+
+        xh_perl_buffer_sync(main_buf);
+
+        if (preserve != NULL && main_buf->start != old_buf_addr) {
+            *off += old_buf_addr - main_buf->start;
+        }
     }
 
-    len = xh_perl_obj_read(reader->perl_obj, main_buf->scalar, xh_perl_buffer_avail(main_buf), main_buf->cur - main_buf->start);
-    xh_perl_buffer_sync(main_buf);
     *buf = main_buf->cur;
     if (len == (size_t) (-1)) {
         croak("Failed to read file");
@@ -582,8 +586,8 @@ xh_perl_obj_reader_read_with_encoding(xh_reader_t *reader, xh_char_t **buf, xh_c
         *off = preserve - enc_buf->start;
         xh_log_debug1("off: %lu", *off);
         if (*off) {
-            xh_log_debug3("memmove dest: %p src %p size: %lu", enc_buf->start, preserve, enc_buf->cur - enc_buf->start);
-            xh_memmove(enc_buf->start, preserve, enc_buf->cur - enc_buf->start);
+            xh_log_debug3("memmove dest: %p src %p size: %lu", enc_buf->start, preserve, enc_buf->end - preserve);
+            xh_memmove(enc_buf->start, preserve, enc_buf->end - preserve);
         }
         enc_buf->cur -= *off;
     }
