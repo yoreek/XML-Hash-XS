@@ -2,7 +2,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 23;
+use Test::More tests => 24;
 use Data::Dumper;
 $Data::Dumper::Indent = 0;
 $Data::Dumper::Sortkeys = 1;
@@ -284,6 +284,21 @@ SKIP: {
         'read from tied handle',
     ;
     untie *DATA;
+}
+
+{
+    use utf8;
+    my $xml = <<'XML';
+<?xml version="1.0" encoding="UTF-8"?>
+<note>Test</note>
+XML
+    no warnings qw(void);
+    substr $xml, 0, 0; # this will cause error in XS param type definition
+    is
+        xml2hash(\$xml),
+        'Test',
+        'check validation parameters',
+    ;
 }
 
 package MyReader;

@@ -131,9 +131,9 @@ xml2hash(...)
         if (SvROK(param))
             param = SvRV(param);
         if (!SvOK(param))
-            croak("Invalid parametesr");
-        if (SvTYPE(param) != SVt_PV && SvTYPE(param) != SVt_PVGV)
-            croak("Invalid parametesr");
+            croak("Invalid parameters");
+        if (!SvPOK(param) && SvTYPE(param) != SVt_PVGV)
+            croak("Invalid parameters");
         input = param;
         nparam++;
 

@@ -1,5 +1,8 @@
 Revision history for XML::Hash::XS.
 
+0.30    2015-03-23
+        Fixbug: parameters validation failed RT#102992 (thanks to Dmytro Zagashev for report)
+
 0.29    2015-01-30
         Fixbug: segmentation fault on test for tied handle
 

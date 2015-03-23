@@ -253,6 +253,8 @@ xh_mmaped_file_reader_destroy(xh_reader_t *reader)
 {
     xh_common_reader_destroy(reader);
 
+    if (reader->fd == -1) return;
+
 #ifdef WIN32
     xh_log_debug1("unmap view of file %s", reader->file);
     UnmapViewOfFile(reader->str);
@@ -672,7 +674,7 @@ xh_reader_init(xh_reader_t *reader, SV *input, xh_char_t *encoding, size_t buf_s
     GV        *gv;
     IO        *io;
 
-    if (SvTYPE(input) == SVt_PV) {
+    if (SvTYPE(input) != SVt_PVGV) {
         str = XH_CHAR_CAST SvPV(input, len);
         if (len == 0)
             croak("String is empty");
