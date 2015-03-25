@@ -156,8 +156,12 @@ PPCAT(loop, _FINISH):
 #define EXPECT_CHAR(desc, c1)                                           \
     case c1: xh_log_trace3("'%c'=[0x%X] - %s expected", c, c, desc);
 
-#define EXPECT_BLANK(desc)                                              \
+#define EXPECT_BLANK_WO_CR(desc)                                        \
     case ' ': case '\t': case '\n':                                     \
+        xh_log_trace3("'%c'=[0x%X] - %s expected", c, c, desc);
+
+#define EXPECT_BLANK(desc)                                              \
+    case ' ': case '\t': case '\n': case '\r':                          \
         xh_log_trace3("'%c'=[0x%X] - %s expected", c, c, desc);
 
 #define EXPECT_DIGIT(desc)                                              \
@@ -231,19 +235,22 @@ PPCAT(loop, _FINISH):
 #define SEARCH_NODE_ATTRIBUTE_VALUE(loop, top_loop, quot)               \
     EXPECT_CHAR("start attr value", quot)                               \
         content = cur;                                                  \
-        have_ref = FALSE;                                               \
+        need_normalize = 0;                                             \
         DO(PPCAT(loop, _END_ATTR_VALUE))                                \
             EXPECT_CHAR("attr value end", quot)                         \
-                if (have_ref) {                                         \
-                    PARSE_REFERENCE(loop, content, cur - content - 1)   \
+                if (need_normalize) {                                   \
+                    NORMALIZE_TEXT(loop, content, cur - content - 1)    \
                     NEW_ATTRIBUTE(node, end - node, enc, enc_len)       \
                 }                                                       \
                 else {                                                  \
                     NEW_ATTRIBUTE(node, end - node, content, cur - content - 1)\
                 }                                                       \
                 goto top_loop;                                          \
+            EXPECT_CHAR("CR", '\r')                                     \
+                need_normalize |= XH_X2H_NORMALIZE_LINE_FEED;           \
+                break;                                                  \
             EXPECT_CHAR("reference", '&')                               \
-                have_ref = TRUE;                                        \
+                need_normalize |= XH_X2H_NORMALIZE_REF;                 \
                 break;                                                  \
         END(PPCAT(loop, _END_ATTR_VALUE))                               \
         goto INVALID_XML;
@@ -398,7 +405,7 @@ PPCAT(loop, _SEARCH_ATTRIBUTE_VALUE):                                   \
         goto INVALID_XML;                                               \
     END6(CDATA, INVALID_XML)
 
-#define _PARSE_REFERENCE(loop)                                          \
+#define NORMALIZE_REFERENCE(loop)                                       \
     _DO(PPCAT(loop, _REFERENCE))                                        \
         EXPECT_CHAR("char reference", '#')                              \
             _DO(PPCAT(loop, _CHAR_REFERENCE))                           \
@@ -490,10 +497,21 @@ PPCAT(loop, _REFEFENCE_VALUE):                                          \
         }                                                               \
     }                                                                   \
     else {                                                              \
-        *enc_cur++ = (xh_char_t) code;                                     \
+        *enc_cur++ = (xh_char_t) code;                                  \
     }
 
-#define PARSE_REFERENCE(loop, s, l)                                     \
+#define NORMALIZE_LINE_FEED(loop)                                       \
+    _DO(PPCAT(loop, _NORMALIZE_LINE_FEED))                              \
+        EXPECT_CHAR("LF", '\n')                                         \
+            goto PPCAT(loop, _NORMALIZE_LINE_FEED_END);                 \
+        EXPECT_ANY("any char")                                          \
+            cur--;                                                      \
+            goto PPCAT(loop, _NORMALIZE_LINE_FEED_END);                 \
+    END(PPCAT(loop, _NORMALIZE_LINE_FEED))                              \
+PPCAT(loop, _NORMALIZE_LINE_FEED_END):                                  \
+    *enc_cur++ = '\n';
+
+#define NORMALIZE_TEXT(loop, s, l)                                      \
     enc_len = l;                                                        \
     if (enc_len) {                                                      \
         old_cur = cur;                                                  \
@@ -508,13 +526,16 @@ PPCAT(loop, _REFEFENCE_VALUE):                                          \
         }                                                               \
         enc = enc_cur = ctx->tmp;                                       \
         memcpy(enc, cur, enc_len);                                      \
-        _DO(PPCAT(loop, _SEARCH_REFERENCE))                             \
+        _DO(PPCAT(loop, _NORMALIZE_TEXT))                               \
             EXPECT_CHAR("reference", '&')                               \
-                _PARSE_REFERENCE(loop)                                  \
+                NORMALIZE_REFERENCE(loop)                               \
+                break;                                                  \
+            EXPECT_CHAR("CR", '\r')                                     \
+                NORMALIZE_LINE_FEED(loop)                               \
                 break;                                                  \
             EXPECT_ANY("any char")                                      \
                 *enc_cur++ = c;                                         \
-        END(PPCAT(loop, _SEARCH_REFERENCE))                             \
+        END(PPCAT(loop, _NORMALIZE_TEXT))                               \
         enc_len = enc_cur - enc;                                        \
         cur = old_cur;                                                  \
         eof = old_eof;                                                  \
@@ -527,25 +548,24 @@ static void
 xh_x2h_parse_chunk(xh_x2h_ctx_t *ctx, xh_char_t **buf, size_t *bytesleft, xh_bool_t terminate)
 {
     xh_char_t         c, *cur, *node, *end, *content, *eof, *enc, *enc_cur, *old_cur, *old_eof;
-    unsigned int   depth, code;
+    unsigned int   depth, code, need_normalize;
     int            bits;
     SV          ***nodes, **lval, *val;
     AV            *av;
-    xh_bool_t      have_ref;
     size_t         enc_len;
 
-    cur          = *buf;
-    eof          = cur + *bytesleft;
-    nodes        = ctx->nodes;
-    depth        = ctx->depth;
-    have_ref     = ctx->have_ref;
-    node         = ctx->node;
-    end          = ctx->end;
-    content      = ctx->content;
-    code         = ctx->code;
-    lval         = ctx->lval;
-    enc          = enc_cur = old_eof = old_cur = NULL;
-    c            = '\0';
+    cur            = *buf;
+    eof            = cur + *bytesleft;
+    nodes          = ctx->nodes;
+    depth          = ctx->depth;
+    need_normalize = ctx->need_normalize;
+    node           = ctx->node;
+    end            = ctx->end;
+    content        = ctx->content;
+    code           = ctx->code;
+    lval           = ctx->lval;
+    enc            = enc_cur = old_eof = old_cur = NULL;
+    c              = '\0';
 
 #define XH_X2H_PROCESS_STATE(st) case st: goto st;
     switch (ctx->state) {
@@ -558,12 +578,12 @@ xh_x2h_parse_chunk(xh_x2h_ctx_t *ctx, xh_char_t **buf, size_t *bytesleft, xh_boo
 
 PARSE_CONTENT:
     content = NULL;
-    have_ref = FALSE;
+    need_normalize = 0;
     DO(CONTENT)
         EXPECT_CHAR("new element", '<')
             if (content != NULL) {
-                if (have_ref) {
-                    PARSE_REFERENCE(TEXT1, content, end - content);
+                if (need_normalize) {
+                    NORMALIZE_TEXT(TEXT1, content, end - content)
                     NEW_TEXT(enc, enc_len)
                 }
                 else {
@@ -640,18 +660,23 @@ PARSE_CONTENT:
 
         EXPECT_CHAR("wrong symbol", '>')
             goto INVALID_XML;
-        EXPECT_BLANK("blank")
+        EXPECT_BLANK_WO_CR("blank")
             break;
         EXPECT_CHAR("reference", '&')
-            have_ref = TRUE;
+            need_normalize |= XH_X2H_NORMALIZE_REF;
+        EXPECT_CHAR("CR", '\r')
+            if (content != NULL) {
+                need_normalize |= XH_X2H_NORMALIZE_LINE_FEED;
+            }
+            break;
         EXPECT_ANY("any char")
             if (content == NULL) content = cur - 1;
             end = cur;
     END(CONTENT)
 
     if (content != NULL) {
-        if (have_ref) {
-            PARSE_REFERENCE(TEXT2, content, end - content);
+        if (need_normalize) {
+            NORMALIZE_TEXT(TEXT2, content, end - content)
             NEW_TEXT(enc, enc_len)
         }
         else {
@@ -662,23 +687,23 @@ PARSE_CONTENT:
 
     if (depth != 0 || nodes[1] == NULL) goto INVALID_XML;
 
-    ctx->state    = PARSER_ST_DONE;
-    *bytesleft    = eof - cur;
-    *buf          = cur;
+    ctx->state          = PARSER_ST_DONE;
+    *bytesleft          = eof - cur;
+    *buf                = cur;
     return;
 
 XML_DECL_FOUND:
-    ctx->state    = XML_DECL_FOUND;
+    ctx->state          = XML_DECL_FOUND;
 CHUNK_FINISH:
-    ctx->content  = content;
-    ctx->node     = node;
-    ctx->end      = end;
-    ctx->depth    = depth;
-    ctx->have_ref = have_ref;
-    ctx->code     = code;
-    ctx->lval     = lval;
-    *bytesleft    = eof - cur;
-    *buf          = cur;
+    ctx->content        = content;
+    ctx->node           = node;
+    ctx->end            = end;
+    ctx->depth          = depth;
+    ctx->need_normalize = need_normalize;
+    ctx->code           = code;
+    ctx->lval           = lval;
+    *bytesleft          = eof - cur;
+    *buf                = cur;
     return;
 
 MAX_DEPTH_EXCEEDED:

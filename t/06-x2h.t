@@ -2,7 +2,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 24;
+use Test::More tests => 26;
 use Data::Dumper;
 $Data::Dumper::Indent = 0;
 $Data::Dumper::Sortkeys = 1;
@@ -298,6 +298,24 @@ XML
         xml2hash(\$xml),
         'Test',
         'check validation parameters',
+    ;
+}
+
+{
+    my $xml=qq[<?xml version="1.0" encoding="utf-8"?>\x0D\x0A<aaaa>\x0D\x0Aasdasdsa\x0D\x0A</aaaa>];
+    is
+        xml2hash(\$xml),
+        'asdasdsa',
+        'bug RT#103002',
+    ;
+}
+
+{
+    my $xml=qq[<a>\x0D\x0Aasd\x0D\x0Aasd\x0D\x0D\x0Aasd\x0D\x0A</a>];
+    is
+        xml2hash(\$xml),
+        "asd\x0Aasd\x0A\x0Aasd",
+        'normalize line feeds',
     ;
 }
 

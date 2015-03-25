@@ -4,6 +4,9 @@
 #include "xh_config.h"
 #include "xh_core.h"
 
+#define XH_X2H_NORMALIZE_REF            1
+#define XH_X2H_NORMALIZE_LINE_FEED      2
+
 #define XH_X2H_PARSER_STATE_LIST                                        \
     XH_X2H_PROCESS_STATE(CONTENT_START)                                 \
     XH_X2H_PROCESS_STATE(PARSE_ELEMENT_START)                           \
@@ -60,7 +63,7 @@ typedef struct {
     xh_char_t          *tmp;
     size_t              tmp_size;
     xh_char_t          *node, *end, *content;
-    xh_bool_t           have_ref;
+    unsigned int        need_normalize;
     SV               ***nodes, **lval;
     unsigned int        depth, code;
     xh_x2h_state_t      state;

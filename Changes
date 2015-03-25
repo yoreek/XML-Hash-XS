@@ -1,5 +1,9 @@
 Revision history for XML::Hash::XS.
 
+0.31    2015-03-25
+        Fixbug: parsing xml failed when CR symbol found after xml declaration
+        RT#103002 (thanks to Dmytro Zagashev for report)
+
 0.30    2015-03-23
         Fixbug: parameters validation failed RT#102992 (thanks to Dmytro Zagashev for report)
 
