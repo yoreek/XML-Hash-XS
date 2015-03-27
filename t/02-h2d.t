@@ -1,4 +1,4 @@
-
+package main;
 use strict;
 use warnings;
 
@@ -17,7 +17,9 @@ else {
     require XML::LibXML;
 }
 
+## no critic (Subroutines::ProhibitSubroutinePrototypes)
 sub fix_xml($) { my $xml = shift; chomp $xml; $xml =~ s|(<\w[^</>]*[^/])></\w+>|$1/>|g; $xml }
+## use critic
 
 our $xml_decl = qq{<?xml version="1.0" encoding="utf-8"?>};
 

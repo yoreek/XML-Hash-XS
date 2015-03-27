@@ -1,119 +1,131 @@
-Revision history for XML::Hash::XS.
+Revision history for perl module XML::Hash::XS
+
+0.32    2015-03-28
+    - Revamped Makefile.PL
+        - Add resources to META_MERGE
+        - Add prereqs to META_ADD
+        - Replace bugtracker to github
+    - Added author tests
 
 0.31    2015-03-25
-        Fixbug: parsing xml failed when CR symbol found after xml declaration
-        RT#103002 (thanks to Dmytro Zagashev for report)
+    - Fix xml parsing failure when CR symbol found after xml declaration
+        - https://rt.cpan.org/Ticket/Display.html?id=103002
+        - Thanks to Dmytro Zagashev for report
 
 0.30    2015-03-23
-        Fixbug: parameters validation failed RT#102992 (thanks to Dmytro Zagashev for report)
+    - Fix params validation failure
+        - https://rt.cpan.org/Ticket/Display.html?id=102992
+        - Thanks to Dmytro Zagashev for report
 
 0.29    2015-01-30
-        Fixbug: segmentation fault on test for tied handle
+    - Fix segmentation fault on test for tied handle
 
 0.28    2015-01-14
-        Fixbug: test for tied handle
-        Fixbug: compilation failure on Haiku OS
+    - Fix test for tied handle
+    - Fix compilation failure on Haiku OS
 
 0.27    2015-01-14
-        Feature: conversion of xml to hash
+    - Added feature conversion of xml to hash
 
 0.26    2014-03-13
-        Fixbug: compilation failure on some OS
-        Fixbug: compilation failure when using libiconv with MinGW
-        Fixbug: segmentation fault when using XML::LibXML
+    - Fix compilation failure on some OS
+    - Fix compilation failure when using libiconv with MinGW
+    - Fix segmentation fault when using XML::LibXML
 
 0.25    2014-03-11
-        Feature: object serialization using methods "toString" and "iternext"
-        Fixbug: docs and other minor fixes
+    - Added possibility object serialization using methods "toString" and "iternext"
+    - Fixed docs and other minor fixes
 
 0.24    2014-01-17
-        Fixbug: overriding CCFLAGS when passed to WriteMakefile
+    - Fix overriding CCFLAGS when passed to WriteMakefile
 
 0.23    2014-01-15
-        Mass refactoring, fix many bugs and add some tests.
+    - Mass refactoring, fix many bugs and add some tests
 
 0.22    2013-07-20
-        Feature: Using XML::LibXML library is optional
-        Fixbug: tests
+    - Using XML::LibXML library is optional now
+    - Fix some tests
 
 0.21    2013-07-16
-        Fixbug: #include error
+    - Fixed #include error
 
 0.20    2013-07-14
-        Fixbug: conv_writer_t has no member named encoder
-        Fixbug: test 02-conv-lx.t
+    - Fix bug when conv_writer_t has no member named encoder
+    - Fix 02-conv-lx.t test
 
 0.19    2013-07-08
-        Fixbug: segmentation fault when value=undef and use_attr=1.
-        Fixbug: set utf8 flag for result string.
+    - Fix segmentation fault when value=undef and use_attr=1
+    - Set utf8 flag for result string
 
 0.18    2013-04-14
-        Fixbug: segmentation fault.
-        Fixbug: skip test if encoding is not supported.
+    - Fix segmentation fault
+    - Skip encoding tests if encoding is not supported
 
 0.17    2013-03-22
-        Fixed bug with invalid stack pointer.
+    - Fix bug with invalid stack pointer
 
 0.16    2013-03-19
-        New option "doc".
+    - New option "doc"
 
 0.15    2013-03-17
-        Using Iconv and ICU libs directly.
+    - Modify for directly using of Iconv and ICU libs
 
 0.14    2013-03-13
-        Fixed bug allocation encoding handler
+    - Fixed bug with memory allocation
 
 0.13    2013-03-09
-        Implemented OO interface.
+    - Implemented OO interface
 
 0.12_01 2013-03-07
-        Added benchmark results.
+    - Added benchmark results
 
 0.12    2013-03-06
-        Experimental support the conversion method of the XML::Hash::LX library.
+    - Added experimental support the conversion method
+    of the XML::Hash::LX library
 
 0.11    2013-03-02
-        Fix for compatibility with version 2.9.0 library libxml2
+    - Fix for compatibility with version 2.9.0 library libxml2
 
 0.10    2012-04-19
-        New option "xml_decl".
+    - New option "xml_decl".
 
 0.09    2012-04-12
-        New option "content".
+    - New option "content"
 
 0.08    2012-04-10
-        Fix for perl < 5.10.
+    - Fix build error when using perl < 5.10
 
 0.07    2012-04-07
-        Fix memory leak.
+    - Fix memory leak
 
 0.06    2012-04-06
-        New options "canonical" and "use_attr".
+    - New options "canonical" and "use_attr"
 
 0.05_03 2012-04-02
-        Fix bug with ppport.h.
+    - Fix bug with ppport.h
 
 0.05_02 2012-04-02
-        Added ppport.h.
-        No more using Scalar::Util.
+    - Added ppport.h
+    - No more using Scalar::Util
 
 0.05_01 2012-03-26
-        Fix test conv.t
+    - Fix conv.t test
 
 0.05    2012-03-25
-        Fix bug with compiling on FreeBSD
+    - Fix build error on FreeBSD
 
 0.04    2012-03-24
-        Updated Makefile.PL
+    - Updated Makefile.PL
 
 0.03_01 2012-02-28
-        Added META.json
+    - Added META.json
 
 0.03    2012-02-25
-        Changed output to a file handle (thanks to Cono)
+    - Changed output to a file handle
+        - Thanks to Cono
 
 0.02    2012-02-15
-        Increased performance by 2.5 times via direct conversion to a string without creating a DOM
+    - Increased performance by 2.5 times via direct conversion to a string without creating a DOM
 
 0.01    2012-02-12
-        First version
+    - First version

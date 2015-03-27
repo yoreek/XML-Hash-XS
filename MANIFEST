@@ -57,3 +57,6 @@ t/test_cp1251_wo_decl.xml
 t/test_utf8.xml
 typemap
 XS.xs
+xt/91-pod-syntax.t
+xt/92-critic.t
+xt/93-changes.t

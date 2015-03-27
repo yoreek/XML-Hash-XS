@@ -1,4 +1,4 @@
-
+package main;
 use strict;
 use warnings;
 
@@ -266,7 +266,9 @@ SKIP: {
 
 {
     use utf8;
-    open(DATA, '<:utf8', 't/test_utf8.xml') or die "Can't open file 't/test_utf8.xml'";
+    ## no critic (InputOutput::ProhibitBarewordFileHandles)
+    open(DATA, '<:encoding(UTF-8)', 't/test_utf8.xml') or die "Can't open file 't/test_utf8.xml'";
+    ## use critic
     is
         xml2hash(*DATA),
         "Привет!",

@@ -2,15 +2,12 @@ package XML::Hash::XS;
 
 use 5.008008;
 use strict;
-no strict 'refs';
 use warnings;
-
 use vars qw($VERSION @EXPORT @EXPORT_OK);
-
 use base 'Exporter';
 @EXPORT_OK = @EXPORT = qw( hash2xml xml2hash );
 
-$VERSION = '0.31';
+$VERSION = '0.32';
 
 require XSLoader;
 XSLoader::load('XML::Hash::XS', $VERSION);
@@ -51,6 +48,12 @@ __END__
 =head1 NAME
 
 XML::Hash::XS - Simple and fast hash to XML conversion written in C
+
+=begin HTML
+
+<p><a href="https://metacpan.org/pod/XML::Hash::XS" target="_blank"><img alt="CPAN version" src="https://badge.fury.io/pl/XML-Hash-XS.svg"></a> <a href="https://travis-ci.org/yoreek/XML-Hash-XS" target="_blank"><img title="Build Status Images" src="https://travis-ci.org/yoreek/XML-Hash-XS.svg"></a></p>
+
+=end HTML
 
 =head1 SYNOPSIS
 
