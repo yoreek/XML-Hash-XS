@@ -35,6 +35,30 @@
 #define MUTABLE_SV(p)   ((SV *)MUTABLE_PTR(p))
 #endif
 
+#ifndef SvRXOK
+#define SvRX(sv)   (Perl_get_re_arg(aTHX_ sv))
+#define SvRXOK(sv) (Perl_get_re_arg(aTHX_ sv) ? TRUE : FALSE)
+static REGEXP *
+Perl_get_re_arg(pTHX_ SV *sv) {
+    MAGIC *mg;
+    if (sv) {
+        if (SvMAGICAL(sv))
+            mg_get(sv);
+        if (SvROK(sv))
+            sv = MUTABLE_SV(SvRV(sv));
+#if PERL_VERSION < 11
+        if (SvTYPE(sv) == SVt_PVMG && (mg = mg_find(sv, PERL_MAGIC_qr)))
+            return (REGEXP *) mg->mg_obj;
+#else
+        if (SvTYPE(sv) == SVt_REGEXP)
+            return (REGEXP *) sv;
+#endif
+    }
+
+    return NULL;
+}
+#endif
+
 #if __GNUC__ >= 3
 # define expect(expr,value)         __builtin_expect ((expr), (value))
 # define XH_INLINE                  static inline

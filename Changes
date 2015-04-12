@@ -1,5 +1,8 @@
 Revision history for perl module XML::Hash::XS
 
+0.35    2015-04-13
+    - Fix bug with regexp on perl 5.8.X
+
 0.34    2015-04-12
     - Fix bug when many contents in one node
 
