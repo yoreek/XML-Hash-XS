@@ -144,9 +144,13 @@ OPTIONS
 
         if use_attr is "0", converter will be use tags only.
 
-    content [ = undef ] *# hash2xml*
+    content [ = undef ] *# hash2xml+xml2hash*
         if defined that the key name for the text content(used only if
         use_attr=1).
+
+    force_array => [ = undef ] *# xml2hash*
+        This option is similar to "ForceArray" from XMl::Simple module:
+        <https://metacpan.org/pod/XML::Simple#ForceArray-1-in---important>.
 
     xml_decl [ = 1 ] *# hash2xml*
         if xml_decl is "1", output will start with the XML declaration
