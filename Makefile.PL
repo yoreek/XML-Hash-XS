@@ -249,12 +249,12 @@ sub get_available_libs {
                 {
                     lib      => 'c',
                     header   => 'iconv.h',
-                    function => 'iconv_t iconv = iconv_open("UTF-8", "UTF-8");(void) iconv_close(iconv);',
+                    function => 'iconv_t iconv = iconv_open("UTF-8", "UTF-8");(void) iconv_close(iconv);return 0;',
                 },
                 {
                     lib      => 'iconv',
                     header   => 'iconv.h',
-                    function => 'iconv_t iconv = iconv_open("UTF-8", "UTF-8");(void) iconv_close(iconv);',
+                    function => 'iconv_t iconv = iconv_open("UTF-8", "UTF-8");(void) iconv_close(iconv);return 0;',
                 },
             ],
         },
@@ -278,7 +278,7 @@ sub get_available_libs {
                         'unicode/utypes.h',
                         'unicode/ucnv.h',
                     ],
-                    function => 'UErrorCode  status = U_ZERO_ERROR;UConverter *uconv = ucnv_open("UTF-8", &status);ucnv_close(uconv);',
+                    function => 'UErrorCode  status = U_ZERO_ERROR;UConverter *uconv = ucnv_open("UTF-8", &status);ucnv_close(uconv);return 0;',
                 },
                 {
                     lib => 'icui18n icuuc icudata',
@@ -288,7 +288,7 @@ sub get_available_libs {
                         'unicode/utypes.h',
                         'unicode/ucnv.h',
                     ],
-                    function => 'UErrorCode  status = U_ZERO_ERROR;UConverter *uconv = ucnv_open("UTF-8", &status);ucnv_close(uconv);',
+                    function => 'UErrorCode  status = U_ZERO_ERROR;UConverter *uconv = ucnv_open("UTF-8", &status);ucnv_close(uconv);return 0;',
                 },
             ],
         },

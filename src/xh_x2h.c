@@ -16,7 +16,7 @@ xh_x2h_match_node(xh_char_t *name, size_t name_len, SV *expr)
     xh_log_trace2("match node: [%.*s]", name_len, name);
 
     if ( SvRXOK(expr) ) {
-        re = SvRX(expr);
+        re = (REGEXP *) SvRX(expr);
         if (re != NULL && pregexec(re, (char *) name, (char *) (name + name_len),
             (char *) name, name_len, newSV(0), 0)
         ) {
@@ -75,7 +75,7 @@ xh_x2h_match_node(xh_char_t *name, size_t name_len, SV *expr)
     /* if content exists that move to hash with 'content' key */        \
     if ( !SvROK(val) || SvTYPE(SvRV(val)) == SVt_PVAV ) {               \
         *lval = newRV_noinc((SV *) newHV());                            \
-        if (SvOK(val) && SvCUR(val)) {                                  \
+        if (SvROK(val) || (SvOK(val) && SvCUR(val))) {                  \
             (void) hv_store((HV *) SvRV(*lval), content_key, content_key_len, val, 0);\
         }                                                               \
         else {                                                          \
