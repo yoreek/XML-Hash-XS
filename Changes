@@ -1,5 +1,9 @@
 Revision history for perl module XML::Hash::XS
 
+0.33    2015-04-12
+    - Fix bug whan many contents in one node
+    - New option "force_array"
+
 0.32    2015-03-28
     - Revamped Makefile.PL
         - Add resources to META_MERGE

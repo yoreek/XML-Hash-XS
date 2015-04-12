@@ -56,6 +56,14 @@ typedef enum {
 } xh_x2h_state_t;
 #undef XH_X2H_PROCESS_STATE
 
+#define XH_X2H_NODE_FLAG_NONE        0
+#define XH_X2H_NODE_FLAG_FORCE_ARRAY 1
+
+typedef struct {
+    SV                **lval;
+    unsigned int        flags;
+} xh_x2h_node_t;
+
 typedef struct {
     xh_opts_t           opts;
     SV                 *hash;
@@ -64,7 +72,8 @@ typedef struct {
     size_t              tmp_size;
     xh_char_t          *node, *end, *content;
     unsigned int        need_normalize;
-    SV               ***nodes, **lval;
+    xh_x2h_node_t      *nodes;
+    SV                **lval;
     unsigned int        depth, code;
     xh_x2h_state_t      state;
     xh_reader_t         reader;

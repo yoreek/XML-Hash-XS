@@ -70,8 +70,8 @@ hash2xml(...)
             xh_init_opts(&ctx.opts);
         }
         else {
-            /* read options from object */
-            memcpy(&ctx.opts, opts, sizeof(xh_opts_t));
+            /* copy options from object */
+            xh_copy_opts(&ctx.opts, opts);
         }
         if (nparam < items) {
             xh_parse_param(&ctx.opts, nparam, ax, items);
@@ -88,6 +88,8 @@ hash2xml(...)
 #else
         result = xh_h2x(&ctx, hash);
 #endif
+
+        xh_destroy_opts(&ctx.opts);
 
         if (ctx.opts.output != NULL) {
             XSRETURN_UNDEF;
@@ -144,25 +146,28 @@ xml2hash(...)
             xh_init_opts(&ctx.opts);
         }
         else {
-            /* read options from object */
-            memcpy(&ctx.opts, opts, sizeof(xh_opts_t));
+            /* copy options from object */
+            xh_copy_opts(&ctx.opts, opts);
         }
         if (nparam < items) {
             xh_parse_param(&ctx.opts, nparam, ax, items);
         }
 
-        ctx.nodes = malloc(sizeof(SV *) * ctx.opts.max_depth);
-        memset(ctx.nodes, 0, sizeof(SV *) * ctx.opts.max_depth);
+        ctx.nodes = malloc(sizeof(xh_x2h_node_t) * ctx.opts.max_depth);
+        memset(ctx.nodes, 0, sizeof(xh_x2h_node_t) * ctx.opts.max_depth);
 
         result = xh_x2h(&ctx, input);
 
         free(ctx.nodes);
+
         if (ctx.tmp != NULL)
             free(ctx.tmp);
 
         if (ctx.opts.output != NULL) {
             XSRETURN_UNDEF;
         }
+
+        xh_destroy_opts(&ctx.opts);
 
         if (result == NULL) {
             warn("Failed to convert");
@@ -179,3 +184,4 @@ DESTROY(opts)
         xh_opts_t *opts;
     CODE:
         xh_destroy_opts(opts);
+        free(opts);

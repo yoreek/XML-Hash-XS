@@ -1,7 +1,42 @@
 #include "xh_config.h"
 #include "xh_core.h"
 
-static const char CONTENT_KEY[] = "content";
+static const char DEF_CONTENT_KEY[] = "content";
+
+static xh_bool_t
+xh_x2h_match_node(xh_char_t *name, size_t name_len, SV *expr)
+{
+    SSize_t    i, l;
+    AV        *av;
+    SV        *sv;
+    xh_char_t *expr_str;
+    STRLEN     expr_len;
+    REGEXP    *re;
+
+    xh_log_trace2("match node: [%.*s]", name_len, name);
+
+    if ( SvRXOK(expr) ) {
+        re = SvRX(expr);
+        if (re != NULL && pregexec(re, (char *) name, (char *) (name + name_len),
+            (char *) name, name_len, newSV(0), 0)
+        ) {
+            return TRUE;
+        }
+    }
+    else {
+        av = (AV *) SvRV(expr);
+        l  = av_len(av);
+        for(i = 0; i <= l; i++) {
+            sv = *av_fetch(av, i, 0);
+            expr_str = (xh_char_t *) SvPVutf8(sv, expr_len);
+            if (name_len == expr_len && !xh_strncmp(name, expr_str, name_len)) {
+                return TRUE;
+            }
+        }
+    }
+
+    return FALSE;
+}
 
 #define NEW_STRING(s, l)                                                \
     newSVpvn_utf8((const char *) (s), (l), ctx->opts.utf8)
@@ -34,13 +69,14 @@ static const char CONTENT_KEY[] = "content";
     }                                                                   \
 
 #define OPEN_TAG(s, l)                                                  \
-    if (depth == 0 && nodes[1] != NULL) goto INVALID_XML;               \
+    xh_log_trace2("new tag: [%.*s]", l, s);                             \
+    if (depth == 0 && nodes[1].lval != NULL) goto INVALID_XML;          \
     val = *lval;                                                        \
     /* if content exists that move to hash with 'content' key */        \
-    if ( !SvROK(val) ) {                                                \
+    if ( !SvROK(val) || SvTYPE(SvRV(val)) == SVt_PVAV ) {               \
         *lval = newRV_noinc((SV *) newHV());                            \
         if (SvOK(val) && SvCUR(val)) {                                  \
-            (void) hv_store((HV *) SvRV(*lval), CONTENT_KEY, sizeof(CONTENT_KEY) - 1, val, 0);\
+            (void) hv_store((HV *) SvRV(*lval), content_key, content_key_len, val, 0);\
         }                                                               \
         else {                                                          \
             SvREFCNT_dec(val);                                          \
@@ -53,12 +89,28 @@ static const char CONTENT_KEY[] = "content";
     val = *lval;                                                        \
     SAVE_VALUE(lval, val, "", 0)                                        \
     if (++depth >= ctx->opts.max_depth) goto MAX_DEPTH_EXCEEDED;        \
-    nodes[depth] = lval;                                                \
+    nodes[depth].lval = lval;                                           \
+    nodes[depth].flags = XH_X2H_NODE_FLAG_NONE;                         \
+    if (depth > 1 && ctx->opts.force_array.enable && (                  \
+        ctx->opts.force_array.always || xh_x2h_match_node(s, l, ctx->opts.force_array.expr)\
+    )) {                                                                \
+        nodes[depth].flags |= XH_X2H_NODE_FLAG_FORCE_ARRAY;             \
+    }                                                                   \
     (s) = NULL;
 
 #define CLOSE_TAG                                                       \
-    if (depth-- == 0) goto INVALID_XML;                                 \
-    lval = nodes[depth];
+    xh_log_trace0("close tag");                                         \
+    if (depth == 0) goto INVALID_XML;                                   \
+    val = *nodes[depth].lval;                                           \
+    if ((nodes[depth].flags & XH_X2H_NODE_FLAG_FORCE_ARRAY)             \
+        && (!SvROK(val) || SvTYPE(SvRV(val)) != SVt_PVAV)               \
+    ) {                                                                 \
+        lval = nodes[depth].lval;                                       \
+        av = newAV();                                                   \
+        *lval = newRV_noinc((SV *) av);                                 \
+        av_store(av, 0, val);                                           \
+    }                                                                   \
+    lval = nodes[--depth].lval;
 
 #define NEW_NODE_ATTRIBUTE(k, kl, v, vl)                                \
     xh_log_trace4("new attr name: [%.*s] value: [%.*s]", kl, k, vl, v); \
@@ -95,10 +147,10 @@ static const char CONTENT_KEY[] = "content";
         }                                                               \
         /* save content to hash with "content" key */                   \
         else {                                                          \
-            lval = hv_fetch((HV *) SvRV(val), CONTENT_KEY, sizeof(CONTENT_KEY) - 1, 1);\
+            lval = hv_fetch((HV *) SvRV(val), content_key, content_key_len, 1);\
             val = *lval;                                                \
             SAVE_VALUE(lval, val, s, l)                                 \
-            lval = nodes[depth];                                        \
+            lval = nodes[depth].lval;                                   \
         }                                                               \
     }                                                                   \
     else if (SvCUR(val)) {                                              \
@@ -547,12 +599,14 @@ PPCAT(loop, _NORMALIZE_LINE_FEED_END):                                  \
 static void
 xh_x2h_parse_chunk(xh_x2h_ctx_t *ctx, xh_char_t **buf, size_t *bytesleft, xh_bool_t terminate)
 {
-    xh_char_t         c, *cur, *node, *end, *content, *eof, *enc, *enc_cur, *old_cur, *old_eof;
+    xh_char_t      c, *cur, *node, *end, *content, *eof, *enc,
+                  *enc_cur, *old_cur, *old_eof, *content_key;
     unsigned int   depth, code, need_normalize;
     int            bits;
-    SV          ***nodes, **lval, *val;
+    SV           **lval, *val;
+    xh_x2h_node_t *nodes;
     AV            *av;
-    size_t         enc_len;
+    size_t         enc_len, content_key_len;
 
     cur            = *buf;
     eof            = cur + *bytesleft;
@@ -566,6 +620,15 @@ xh_x2h_parse_chunk(xh_x2h_ctx_t *ctx, xh_char_t **buf, size_t *bytesleft, xh_boo
     lval           = ctx->lval;
     enc            = enc_cur = old_eof = old_cur = NULL;
     c              = '\0';
+
+    if (ctx->opts.content[0] == '\0') {
+        content_key = (xh_char_t *) DEF_CONTENT_KEY;
+        content_key_len = sizeof(DEF_CONTENT_KEY) - 1;
+    }
+    else {
+        content_key = ctx->opts.content;
+        content_key_len = xh_strlen(ctx->opts.content);
+    }
 
 #define XH_X2H_PROCESS_STATE(st) case st: goto st;
     switch (ctx->state) {
@@ -685,7 +748,7 @@ PARSE_CONTENT:
         content = NULL;
     }
 
-    if (depth != 0 || nodes[1] == NULL) goto INVALID_XML;
+    if (depth != 0 || nodes[1].lval == NULL) goto INVALID_XML;
 
     ctx->state          = PARSER_ST_DONE;
     *bytesleft          = eof - cur;
@@ -763,7 +826,7 @@ xh_x2h(xh_x2h_ctx_t *ctx, SV *input)
     XCPT_TRY_START
     {
         result = ctx->hash = newRV_noinc( (SV *) hv );
-        ctx->nodes[0] = ctx->lval = &ctx->hash;
+        ctx->nodes[0].lval = ctx->lval = &ctx->hash;
 
         xh_reader_init(&ctx->reader, input, ctx->opts.encoding, ctx->opts.buf_size);
 

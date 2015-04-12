@@ -7,30 +7,31 @@
 #define XH_INTERNAL_ENCODING "utf-8"
 
 /* Default opts */
-#define XH_DEF_OUTPUT     NULL
-#define XH_DEF_METHOD     "NATIVE"
-#define XH_DEF_ROOT       "root"
-#define XH_DEF_VERSION    "1.0"
-#define XH_DEF_ENCODING   ""
-#define XH_DEF_UTF8       TRUE
-#define XH_DEF_INDENT     0
-#define XH_DEF_CANONICAL  FALSE
-#define XH_DEF_USE_ATTR   FALSE
-#define XH_DEF_CONTENT    ""
-#define XH_DEF_XML_DECL   TRUE
-#define XH_DEF_KEEP_ROOT  FALSE
+#define XH_DEF_OUTPUT      NULL
+#define XH_DEF_METHOD      "NATIVE"
+#define XH_DEF_ROOT        "root"
+#define XH_DEF_VERSION     "1.0"
+#define XH_DEF_ENCODING    ""
+#define XH_DEF_UTF8        TRUE
+#define XH_DEF_INDENT      0
+#define XH_DEF_CANONICAL   FALSE
+#define XH_DEF_USE_ATTR    FALSE
+#define XH_DEF_CONTENT     ""
+#define XH_DEF_XML_DECL    TRUE
+#define XH_DEF_KEEP_ROOT   FALSE
 #ifdef XH_HAVE_DOM
-#define XH_DEF_DOC        FALSE
+#define XH_DEF_DOC         FALSE
 #endif
+#define XH_DEF_FORCE_ARRAY &PL_sv_undef
 
-#define XH_DEF_ATTR       "-"
-#define XH_DEF_TEXT       "#text"
-#define XH_DEF_TRIM       FALSE
-#define XH_DEF_CDATA      ""
-#define XH_DEF_COMM       ""
+#define XH_DEF_ATTR        "-"
+#define XH_DEF_TEXT        "#text"
+#define XH_DEF_TRIM        FALSE
+#define XH_DEF_CDATA       ""
+#define XH_DEF_COMM        ""
 
-#define XH_DEF_MAX_DEPTH  1024
-#define XH_DEF_BUF_SIZE   4096
+#define XH_DEF_MAX_DEPTH   1024
+#define XH_DEF_BUF_SIZE    4096
 
 typedef enum {
     XH_METHOD_NATIVE = 0,
@@ -57,6 +58,7 @@ typedef struct {
 #endif
     xh_int_t               max_depth;
     xh_int_t               buf_size;
+    xh_pattern_t           force_array;
 
     /* LX options */
     xh_char_t              attr[XH_PARAM_LEN];
@@ -71,5 +73,6 @@ xh_opts_t *xh_create_opts(void);
 void xh_destroy_opts(xh_opts_t *opts);
 xh_bool_t xh_init_opts(xh_opts_t *opts);
 void xh_parse_param(xh_opts_t *opts, xh_int_t first, I32 ax, I32 items);
+void xh_copy_opts(xh_opts_t *dst, xh_opts_t *src);
 
 #endif /* _XH_H_ */

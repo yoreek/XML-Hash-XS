@@ -32,3 +32,27 @@ xh_param_assign_bool(SV *value)
 
     return FALSE;
 }
+
+void
+xh_param_assign_pattern(xh_pattern_t *patt, SV *value)
+{
+    if (patt->expr != NULL) {
+        SvREFCNT_dec(patt->expr);
+        patt->expr = NULL;
+    }
+
+    if ( SvOK(value) && SvTRUE(value) ) {
+        patt->enable = TRUE;
+        if ( SvRXOK(value) || (SvROK(value) && SvTYPE(SvRV(value)) == SVt_PVAV) ) {
+            patt->always = FALSE;
+            patt->expr   = value;
+            SvREFCNT_inc(value);
+        }
+        else {
+            patt->always = TRUE;
+        }
+    }
+    else {
+        patt->enable = FALSE;
+    }
+}

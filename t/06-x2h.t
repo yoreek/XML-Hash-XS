@@ -2,7 +2,7 @@ package main;
 use strict;
 use warnings;
 
-use Test::More tests => 26;
+use Test::More tests => 31;
 use Data::Dumper;
 $Data::Dumper::Indent = 0;
 $Data::Dumper::Sortkeys = 1;
@@ -61,7 +61,7 @@ our $xml_decl_utf8 = qq{<?xml version="1.0" encoding="utf-8"?>};
 
 {
     is
-        Dumper(xml2hash(<<"XML", keep_root => 1)),
+        Dumper(xml2hash(<<"XML", keep_root => 1, content => 'text')),
 <root attr1="1" attr2="2">
     <node1>value1</node1>
     <node2 attr1="1">value2</node2>
@@ -95,12 +95,12 @@ root => {
     item   => ['1', '2', '3'],
     node1  => 'value1',
     node2  => {
-        attr1   => '1',
-        content => 'value2',
+        attr1 => '1',
+        text  => 'value2',
     },
     node3  => ['content1', 'content2'],
     node4  => {
-        content     => ['content1', 'content2'],
+        text        => ['content1', 'content2'],
         empty_node4 => '',
     },
 }
@@ -318,6 +318,83 @@ XML
         xml2hash(\$xml),
         "asd\x0Aasd\x0A\x0Aasd",
         'normalize line feeds',
+    ;
+}
+
+{
+    is
+        Dumper(xml2hash(<<"XML")),
+<root>
+    <aaa>bbb<!-- ccc -->ddd<eee>fff</eee>ggg</aaa>
+</root>
+XML
+        Dumper({aaa => { content => ['bbb', 'ddd', 'ggg'], eee => 'fff' }}),
+        'bug with many contents in the one node',
+    ;
+}
+
+{
+    is
+        Dumper(xml2hash(<<"XML", force_array => 0)),
+<root>
+    <aaa>bbb</aaa>
+    <ccc><ddd>ggg</ddd>eee<!-- -->fff</ccc>
+</root>
+XML
+        Dumper({
+            aaa => 'bbb',
+            ccc => {'content' => ['eee', 'fff'], 'ddd' => 'ggg'},
+        }),
+        'unuse force_array option',
+    ;
+}
+
+{
+    is
+        Dumper(xml2hash(<<"XML", force_array => 1)),
+<root>
+    <aaa>bbb</aaa>
+    <ccc><ddd>ggg</ddd>eee<!-- -->fff</ccc>
+</root>
+XML
+        Dumper({
+            aaa => ['bbb'],
+            ccc => [{'content' => ['eee', 'fff'], 'ddd' => ['ggg']}],
+        }),
+        'use force_array option',
+    ;
+}
+
+{
+    is
+        Dumper(xml2hash(<<"XML", force_array => qr/aaa|ddd/)),
+<root>
+    <aaa>bbb</aaa>
+    <ccc><ddd>ggg</ddd>eee<!-- -->fff</ccc>
+</root>
+XML
+        Dumper({
+            aaa => ['bbb'],
+            ccc => {'content' => ['eee', 'fff'], 'ddd' => ['ggg']},
+        }),
+        'use force_array option with regexp',
+    ;
+}
+
+{
+    my $o = XML::Hash::XS->new(force_array => ['aaa', 'ddd']);
+    is
+        Dumper($o->xml2hash(<<"XML")),
+<root>
+    <aaa>bbb</aaa>
+    <ccc><ddd>ggg</ddd>eee<!-- -->fff</ccc>
+</root>
+XML
+        Dumper({
+            aaa => ['bbb'],
+            ccc => {'content' => ['eee', 'fff'], 'ddd' => ['ggg']},
+        }),
+        'use force_array option with array',
     ;
 }
 

@@ -23,7 +23,7 @@
 
 #define xh_str_equal7(p, c0, c1, c2, c3, c4, c5, c6)                    \
     (*(uint32_t *) p == ((c3 << 24) | (c2 << 16) | (c1 << 8) | c0)      \
-        && ((uint32_t *) p)[1] == ((c6 << 16) | (c5 << 8) | c4))
+        && (((uint32_t *) p)[1]  & 0xffffff) == ((c6 << 16) | (c5 << 8) | c4))
 
 #define xh_str_equal8(p, c0, c1, c2, c3, c4, c5, c6, c7)                \
     (*(uint32_t *) p == ((c3 << 24) | (c2 << 16) | (c1 << 8) | c0)      \
@@ -38,6 +38,11 @@
     (*(uint32_t *) p == ((c3 << 24) | (c2 << 16) | (c1 << 8) | c0)      \
         && ((uint32_t *) p)[1] == ((c7 << 24) | (c6 << 16) | (c5 << 8) | c4)\
         && (((uint32_t *) p)[2] & 0xffff) == ((c9 << 8) | c8))
+
+#define xh_str_equal11(p, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10)  \
+    (*(uint32_t *) p == ((c3 << 24) | (c2 << 16) | (c1 << 8) | c0)      \
+        && ((uint32_t *) p)[1] == ((c7 << 24) | (c6 << 16) | (c5 << 8) | c4)\
+        && (((uint32_t *) p)[2] & 0xffffff) == ((c10 << 16) | (c9 << 8) | c8))
 
 
 #define xh_strcmp(s1, s2)       strcmp((const char *) (s1), (const char *) (s2))
