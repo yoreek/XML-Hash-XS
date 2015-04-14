@@ -7,42 +7,44 @@ use vars qw($VERSION @EXPORT @EXPORT_OK);
 use base 'Exporter';
 @EXPORT_OK = @EXPORT = qw( hash2xml xml2hash );
 
-$VERSION = '0.35';
+$VERSION = '0.36';
 
 require XSLoader;
 XSLoader::load('XML::Hash::XS', $VERSION);
 
 use vars qw($method $output $root $version $encoding $utf8 $indent $canonical
     $use_attr $content $xml_decl $doc $max_depth $attr $text $trim $cdata
-    $comm $buf_size $keep_root $force_array
+    $comm $buf_size $keep_root $force_array $force_content $merge_text
 );
 
 # 'NATIVE' or 'LX'
 $method      = 'NATIVE';
 
 # native options
-$output      = undef;
-$root        = 'root';
-$version     = '1.0';
-$encoding    = '';
-$utf8        = 1;
-$indent      = 0;
-$canonical   = 0;
-$use_attr    = 0;
-$content     = undef;
-$xml_decl    = 1;
-$keep_root   = 0;#
-$doc         = 0;
-$max_depth   = 1024;
-$buf_size    = 4096;
-$trim        = 0;
-$force_array = undef;
+$output        = undef;
+$root          = 'root';
+$version       = '1.0';
+$encoding      = '';
+$utf8          = 1;
+$indent        = 0;
+$canonical     = 0;
+$use_attr      = 0;
+$content       = undef;
+$xml_decl      = 1;
+$keep_root     = 0;#
+$doc           = 0;
+$max_depth     = 1024;
+$buf_size      = 4096;
+$trim          = 0;
+$force_array   = undef;
+$force_content = 0;
+$merge_text    = 0;
 
 # XML::Hash::LX options
-$attr        = '-';
-$text        = '#text';
-$cdata       = undef;
-$comm        = undef;
+$attr          = '-';
+$text          = '#text';
+$cdata         = undef;
+$comm          = undef;
 
 1;
 __END__
@@ -221,6 +223,14 @@ if defined that the key name for the text content(used only if use_attr=1).
 =item force_array => [ = undef ] I<# xml2hash>
 
 This option is similar to "ForceArray" from XMl::Simple module: L<https://metacpan.org/pod/XML::Simple#ForceArray-1-in---important>.
+
+=item force_content => [ = 0 ] I<# xml2hash>
+
+This option is similar to "ForceContent" from XMl::Simple module: L<https://metacpan.org/pod/XML::Simple#ForceContent-1-in---seldom-used>.
+
+=item merge_text [ = 0 ] I<# xml2hash>
+
+Setting this option to "1" will cause merge adjacent test nodes.
 
 =item xml_decl [ = 1 ] I<# hash2xml>
 

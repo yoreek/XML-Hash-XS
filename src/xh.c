@@ -10,33 +10,35 @@ xh_init_opts(xh_opts_t *opts)
     XH_PARAM_READ_INIT
 
     /* native options */
-    XH_PARAM_READ_STRING (opts->root,        "XML::Hash::XS::root",        XH_DEF_ROOT);
-    XH_PARAM_READ_STRING (opts->version,     "XML::Hash::XS::version",     XH_DEF_VERSION);
-    XH_PARAM_READ_STRING (opts->encoding,    "XML::Hash::XS::encoding",    XH_DEF_ENCODING);
-    XH_PARAM_READ_INT    (opts->indent,      "XML::Hash::XS::indent",      XH_DEF_INDENT);
-    XH_PARAM_READ_BOOL   (opts->canonical,   "XML::Hash::XS::canonical",   XH_DEF_CANONICAL);
-    XH_PARAM_READ_STRING (opts->content,     "XML::Hash::XS::content",     XH_DEF_CONTENT);
-    XH_PARAM_READ_BOOL   (opts->utf8,        "XML::Hash::XS::utf8",        XH_DEF_UTF8);
-    XH_PARAM_READ_BOOL   (opts->xml_decl,    "XML::Hash::XS::xml_decl",    XH_DEF_XML_DECL);
-    XH_PARAM_READ_BOOL   (opts->keep_root,   "XML::Hash::XS::keep_root",   XH_DEF_KEEP_ROOT);
+    XH_PARAM_READ_STRING (opts->root,          "XML::Hash::XS::root",          XH_DEF_ROOT);
+    XH_PARAM_READ_STRING (opts->version,       "XML::Hash::XS::version",       XH_DEF_VERSION);
+    XH_PARAM_READ_STRING (opts->encoding,      "XML::Hash::XS::encoding",      XH_DEF_ENCODING);
+    XH_PARAM_READ_INT    (opts->indent,        "XML::Hash::XS::indent",        XH_DEF_INDENT);
+    XH_PARAM_READ_BOOL   (opts->canonical,     "XML::Hash::XS::canonical",     XH_DEF_CANONICAL);
+    XH_PARAM_READ_STRING (opts->content,       "XML::Hash::XS::content",       XH_DEF_CONTENT);
+    XH_PARAM_READ_BOOL   (opts->utf8,          "XML::Hash::XS::utf8",          XH_DEF_UTF8);
+    XH_PARAM_READ_BOOL   (opts->xml_decl,      "XML::Hash::XS::xml_decl",      XH_DEF_XML_DECL);
+    XH_PARAM_READ_BOOL   (opts->keep_root,     "XML::Hash::XS::keep_root",     XH_DEF_KEEP_ROOT);
 #ifdef XH_HAVE_DOM
-    XH_PARAM_READ_BOOL   (opts->doc,         "XML::Hash::XS::doc",         XH_DEF_DOC);
+    XH_PARAM_READ_BOOL   (opts->doc,           "XML::Hash::XS::doc",           XH_DEF_DOC);
 #endif
-    XH_PARAM_READ_BOOL   (use_attr,          "XML::Hash::XS::use_attr",    XH_DEF_USE_ATTR);
-    XH_PARAM_READ_INT    (opts->max_depth,   "XML::Hash::XS::max_depth",   XH_DEF_MAX_DEPTH);
-    XH_PARAM_READ_INT    (opts->buf_size,    "XML::Hash::XS::buf_size",    XH_DEF_BUF_SIZE);
-    XH_PARAM_READ_PATTERN(opts->force_array, "XML::Hash::XS::force_array", XH_DEF_FORCE_ARRAY);
+    XH_PARAM_READ_BOOL   (use_attr,            "XML::Hash::XS::use_attr",      XH_DEF_USE_ATTR);
+    XH_PARAM_READ_INT    (opts->max_depth,     "XML::Hash::XS::max_depth",     XH_DEF_MAX_DEPTH);
+    XH_PARAM_READ_INT    (opts->buf_size,      "XML::Hash::XS::buf_size",      XH_DEF_BUF_SIZE);
+    XH_PARAM_READ_PATTERN(opts->force_array,   "XML::Hash::XS::force_array",   XH_DEF_FORCE_ARRAY);
+    XH_PARAM_READ_BOOL   (opts->force_content, "XML::Hash::XS::force_content", XH_DEF_FORCE_CONTENT);
+    XH_PARAM_READ_BOOL   (opts->merge_text,    "XML::Hash::XS::merge_text",    XH_DEF_MERGE_TEXT);
 
     /* XML::Hash::LX options */
-    XH_PARAM_READ_STRING (opts->attr,        "XML::Hash::XS::attr",        XH_DEF_ATTR);
+    XH_PARAM_READ_STRING (opts->attr,          "XML::Hash::XS::attr",          XH_DEF_ATTR);
     opts->attr_len = xh_strlen(opts->attr);
-    XH_PARAM_READ_STRING (opts->text,        "XML::Hash::XS::text",        XH_DEF_TEXT);
-    XH_PARAM_READ_BOOL   (opts->trim,        "XML::Hash::XS::trim",        XH_DEF_TRIM);
-    XH_PARAM_READ_STRING (opts->cdata,       "XML::Hash::XS::cdata",       XH_DEF_CDATA);
-    XH_PARAM_READ_STRING (opts->comm,        "XML::Hash::XS::comm",        XH_DEF_COMM);
+    XH_PARAM_READ_STRING (opts->text,          "XML::Hash::XS::text",          XH_DEF_TEXT);
+    XH_PARAM_READ_BOOL   (opts->trim,          "XML::Hash::XS::trim",          XH_DEF_TRIM);
+    XH_PARAM_READ_STRING (opts->cdata,         "XML::Hash::XS::cdata",         XH_DEF_CDATA);
+    XH_PARAM_READ_STRING (opts->comm,          "XML::Hash::XS::comm",          XH_DEF_COMM);
 
     /* method */
-    XH_PARAM_READ_STRING(method,            "XML::Hash::XS::method",      XH_DEF_METHOD);
+    XH_PARAM_READ_STRING (method,              "XML::Hash::XS::method",        XH_DEF_METHOD);
     if (xh_strcmp(method, XH_CHAR_CAST "LX") == 0) {
         opts->method = XH_METHOD_LX;
     }
@@ -48,7 +50,7 @@ xh_init_opts(xh_opts_t *opts)
     }
 
     /* output, NULL - to string */
-    XH_PARAM_READ_REF    (opts->output,    "XML::Hash::XS::output",    XH_DEF_OUTPUT);
+    XH_PARAM_READ_REF    (opts->output,        "XML::Hash::XS::output",        XH_DEF_OUTPUT);
 
     return TRUE;
 }
@@ -237,9 +239,19 @@ xh_parse_param(xh_opts_t *opts, xh_int_t first, I32 ax, I32 items)
                     break;
                 }
                 goto error;
+            case 10:
+                if (xh_str_equal10(p, 'm', 'e', 'r', 'g', 'e', '_', 't', 'e', 'x', 't')) {
+                    opts->merge_text = xh_param_assign_bool(v);
+                    break;
+                }
             case 11:
                 if (xh_str_equal11(p, 'f', 'o', 'r', 'c', 'e', '_', 'a', 'r', 'r', 'a', 'y')) {
                     xh_param_assign_pattern(&opts->force_array, v);
+                    break;
+                }
+            case 13:
+                if (xh_str_equal13(p, 'f', 'o', 'r', 'c', 'e', '_', 'c', 'o', 'n', 't', 'e', 'n', 't')) {
+                    opts->force_content = xh_param_assign_bool(v);
                     break;
                 }
             default:

@@ -152,6 +152,14 @@ OPTIONS
         This option is similar to "ForceArray" from XMl::Simple module:
         <https://metacpan.org/pod/XML::Simple#ForceArray-1-in---important>.
 
+    force_content => [ = 0 ] *# xml2hash*
+        This option is similar to "ForceContent" from XMl::Simple module:
+        <https://metacpan.org/pod/XML::Simple#ForceContent-1-in---seldom-use
+        d>.
+
+    merge_text [ = 0 ] *# xml2hash*
+        Setting this option to "1" will cause merge adjacent test nodes.
+
     xml_decl [ = 1 ] *# hash2xml*
         if xml_decl is "1", output will start with the XML declaration
         '<?xml version="1.0" encoding="utf-8"?>'.

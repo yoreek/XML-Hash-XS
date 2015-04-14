@@ -8,7 +8,6 @@ xh_x2h_match_node(xh_char_t *name, size_t name_len, SV *expr)
 {
     SSize_t    i, l;
     AV        *av;
-    SV        *sv;
     xh_char_t *expr_str;
     STRLEN     expr_len;
     REGEXP    *re;
@@ -27,10 +26,20 @@ xh_x2h_match_node(xh_char_t *name, size_t name_len, SV *expr)
         av = (AV *) SvRV(expr);
         l  = av_len(av);
         for(i = 0; i <= l; i++) {
-            sv = *av_fetch(av, i, 0);
-            expr_str = (xh_char_t *) SvPVutf8(sv, expr_len);
-            if (name_len == expr_len && !xh_strncmp(name, expr_str, name_len)) {
-                return TRUE;
+            expr = *av_fetch(av, i, 0);
+            if ( SvRXOK(expr) ) {
+                re = (REGEXP *) SvRX(expr);
+                if (re != NULL && pregexec(re, (char *) name, (char *) (name + name_len),
+                    (char *) name, name_len, newSV(0), 0)
+                ) {
+                    return TRUE;
+                }
+            }
+            else {
+                expr_str = (xh_char_t *) SvPVutf8(expr, expr_len);
+                if (name_len == expr_len && !xh_strncmp(name, expr_str, name_len)) {
+                    return TRUE;
+                }
             }
         }
     }
@@ -50,21 +59,31 @@ xh_x2h_match_node(xh_char_t *name, size_t name_len, SV *expr)
     if (ctx->opts.utf8) SvUTF8_on(v);
 
 #define SAVE_VALUE(lv, v , s, l)                                        \
+    xh_log_trace2("save value: [%.*s]", l, s);                          \
     if ( SvOK(v) ) {                                                    \
-        /* get array if value is reference to array */                  \
-        if ( SvROK(v) && SvTYPE(SvRV(v)) == SVt_PVAV) {                 \
-            av = (AV *) SvRV(v);                                        \
+        if (ctx->opts.merge_text && !SvROK(v)) {                        \
+            xh_log_trace0("merge");                                     \
+            CAT_STRING(v, s, l);                                        \
         }                                                               \
-        /* create a new array and move value to array */                \
         else {                                                          \
-            av = newAV();                                               \
-            *(lv) = newRV_noinc((SV *) av);                             \
-            av_store(av, 0, v);                                         \
+            xh_log_trace0("add to array");                              \
+            /* get array if value is reference to array */              \
+            if ( SvROK(v) && SvTYPE(SvRV(v)) == SVt_PVAV) {             \
+                av = (AV *) SvRV(v);                                    \
+            }                                                           \
+            /* create a new array and move value to array */            \
+            else {                                                      \
+                av = newAV();                                           \
+                *(lv) = newRV_noinc((SV *) av);                         \
+                av_store(av, 0, v);                                     \
+                (v) = *(lv);                                            \
+            }                                                           \
+            /* add value to array */                                    \
+            (lv) = av_store(av, av_len(av) + 1, NEW_STRING((s), (l)));  \
         }                                                               \
-        /* add value to array */                                        \
-        (lv) = av_store(av, av_len(av) + 1, NEW_STRING((s), (l)));      \
     }                                                                   \
     else {                                                              \
+        xh_log_trace0("set string");                                    \
         SET_STRING((v), (s), (l));                                      \
     }                                                                   \
 
@@ -76,7 +95,7 @@ xh_x2h_match_node(xh_char_t *name, size_t name_len, SV *expr)
     if ( !SvROK(val) || SvTYPE(SvRV(val)) == SVt_PVAV ) {               \
         *lval = newRV_noinc((SV *) newHV());                            \
         if (SvROK(val) || (SvOK(val) && SvCUR(val))) {                  \
-            (void) hv_store((HV *) SvRV(*lval), content_key, content_key_len, val, 0);\
+            (void) hv_store((HV *) SvRV(*lval), (const char *) content_key, (I32) content_key_len, val, 0);\
         }                                                               \
         else {                                                          \
             SvREFCNT_dec(val);                                          \
@@ -91,9 +110,9 @@ xh_x2h_match_node(xh_char_t *name, size_t name_len, SV *expr)
     if (++depth >= ctx->opts.max_depth) goto MAX_DEPTH_EXCEEDED;        \
     nodes[depth].lval = lval;                                           \
     nodes[depth].flags = XH_X2H_NODE_FLAG_NONE;                         \
-    if (depth > 1 && ctx->opts.force_array.enable && (                  \
-        ctx->opts.force_array.always || xh_x2h_match_node(s, l, ctx->opts.force_array.expr)\
-    )) {                                                                \
+    if (depth > 1 && ctx->opts.force_array.enable && (!SvROK(val) || SvTYPE(SvRV(val)) != SVt_PVAV) \
+        && (ctx->opts.force_array.always || xh_x2h_match_node(s, l, ctx->opts.force_array.expr))\
+    ) {                                                                 \
         nodes[depth].flags |= XH_X2H_NODE_FLAG_FORCE_ARRAY;             \
     }                                                                   \
     (s) = NULL;
@@ -102,6 +121,12 @@ xh_x2h_match_node(xh_char_t *name, size_t name_len, SV *expr)
     xh_log_trace0("close tag");                                         \
     if (depth == 0) goto INVALID_XML;                                   \
     val = *nodes[depth].lval;                                           \
+    if (ctx->opts.force_content && !SvROK(val)) {                       \
+        lval = nodes[depth].lval;                                       \
+        *lval = newRV_noinc((SV *) newHV());                            \
+        (void) hv_store((HV *) SvRV(*lval), (const char *) content_key, (I32) content_key_len, val, 0);\
+        val = *lval;                                                    \
+    }                                                                   \
     if ((nodes[depth].flags & XH_X2H_NODE_FLAG_FORCE_ARRAY)             \
         && (!SvROK(val) || SvTYPE(SvRV(val)) != SVt_PVAV)               \
     ) {                                                                 \
@@ -113,6 +138,11 @@ xh_x2h_match_node(xh_char_t *name, size_t name_len, SV *expr)
     lval = nodes[--depth].lval;
 
 #define NEW_NODE_ATTRIBUTE(k, kl, v, vl)                                \
+    OPEN_TAG(k, kl)                                                     \
+    NEW_TEXT(v, vl)                                                     \
+    CLOSE_TAG
+
+#define _NEW_NODE_ATTRIBUTE(k, kl, v, vl)                               \
     xh_log_trace4("new attr name: [%.*s] value: [%.*s]", kl, k, vl, v); \
     /* create hash if not created already */                            \
     if ( !SvROK(*lval) ) {                                              \
@@ -138,8 +168,10 @@ xh_x2h_match_node(xh_char_t *name, size_t name_len, SV *expr)
 
 #define NEW_TEXT(s, l)                                                  \
     if (depth == 0) goto INVALID_XML;                                   \
+    xh_log_trace2("new text: [%.*s]", l, s);                            \
     val = *lval;                                                        \
     if ( SvROK(val) ) {                                                 \
+        xh_log_trace0("add to array");                                  \
         /* add content to array*/                                       \
         if (SvTYPE(SvRV(val)) == SVt_PVAV) {                            \
             av = (AV *) SvRV(val);                                      \
@@ -147,13 +179,17 @@ xh_x2h_match_node(xh_char_t *name, size_t name_len, SV *expr)
         }                                                               \
         /* save content to hash with "content" key */                   \
         else {                                                          \
-            lval = hv_fetch((HV *) SvRV(val), content_key, content_key_len, 1);\
+            xh_log_trace0("save to hash");                              \
+            lval = hv_fetch((HV *) SvRV(val), (const char *) content_key, (I32) content_key_len, 1);\
             val = *lval;                                                \
             SAVE_VALUE(lval, val, s, l)                                 \
             lval = nodes[depth].lval;                                   \
         }                                                               \
     }                                                                   \
-    else if (SvCUR(val)) {                                              \
+    else if (SvCUR(val) && !ctx->opts.merge_text) {                                              \
+        xh_log_trace0("create a new array");                            \
+        xh_log_trace1("create a new array val: %s", SvPV_nolen(val));   \
+        xh_log_trace3("create a new array svrok: %d type: %d rtype: %d", SvROK(val), SvTYPE(val), SvTYPE(SvRV(val)));\
         /* content already exists, create a new array and move*/        \
         /* old and new content to array */                              \
         av = newAV();                                                   \
@@ -162,7 +198,8 @@ xh_x2h_match_node(xh_char_t *name, size_t name_len, SV *expr)
         av_store(av, av_len(av) + 1, NEW_STRING(s, l));                 \
     }                                                                   \
     else {                                                              \
-        /* add content to empty string */                               \
+        xh_log_trace0("concat");                                        \
+        /* concatenate with previous string */                          \
         CAT_STRING(val, s, l)                                           \
     }                                                                   \
 

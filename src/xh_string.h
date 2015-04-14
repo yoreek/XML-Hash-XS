@@ -5,44 +5,40 @@
 #include "xh_core.h"
 
 #define xh_str_equal2(p, c0, c1)                                        \
-    (*p == c0 && p[1] == c1)
+    ((((uint32_t *) (p))[0] & 0xffff) == ((c1 << 8) | c0))
 
 #define xh_str_equal3(p, c0, c1, c2)                                    \
-    (*p == c0 && p[1] == c1 && p[2] == c2)
+    ((((uint32_t *) (p))[0]  & 0xffffff) == ((c2 << 16) | (c1 << 8) | c0))
 
 #define xh_str_equal4(p, c0, c1, c2, c3)                                \
-    (*(uint32_t *) p == ((c3 << 24) | (c2 << 16) | (c1 << 8) | c0))
+    (*(uint32_t *) (p) == ((c3 << 24) | (c2 << 16) | (c1 << 8) | c0))
 
 #define xh_str_equal5(p, c0, c1, c2, c3, c4)                            \
-    (*(uint32_t *) p == ((c3 << 24) | (c2 << 16) | (c1 << 8) | c0)      \
-        && p[4] == c4)
+    (xh_str_equal4(p, c0, c1, c2, c3) && (p)[4] == c4)
 
 #define xh_str_equal6(p, c0, c1, c2, c3, c4, c5)                        \
-    (*(uint32_t *) p == ((c3 << 24) | (c2 << 16) | (c1 << 8) | c0)      \
-        && (((uint32_t *) p)[1] & 0xffff) == ((c5 << 8) | c4))
+    (xh_str_equal4(p, c0, c1, c2, c3) && xh_str_equal2(&p[4], c4, c5))
 
 #define xh_str_equal7(p, c0, c1, c2, c3, c4, c5, c6)                    \
-    (*(uint32_t *) p == ((c3 << 24) | (c2 << 16) | (c1 << 8) | c0)      \
-        && (((uint32_t *) p)[1]  & 0xffffff) == ((c6 << 16) | (c5 << 8) | c4))
+    (xh_str_equal4(p, c0, c1, c2, c3) && xh_str_equal3(&p[4], c4, c5, c6))
 
 #define xh_str_equal8(p, c0, c1, c2, c3, c4, c5, c6, c7)                \
-    (*(uint32_t *) p == ((c3 << 24) | (c2 << 16) | (c1 << 8) | c0)      \
-        && ((uint32_t *) p)[1] == ((c7 << 24) | (c6 << 16) | (c5 << 8) | c4))
+    (xh_str_equal4(p, c0, c1, c2, c3) && xh_str_equal4(&p[4], c4, c5, c6, c7))
 
 #define xh_str_equal9(p, c0, c1, c2, c3, c4, c5, c6, c7, c8)            \
-    (*(uint32_t *) p == ((c3 << 24) | (c2 << 16) | (c1 << 8) | c0)      \
-        && ((uint32_t *) p)[1] == ((c7 << 24) | (c6 << 16) | (c5 << 8) | c4)\
-        && p[8] == c8)
+    (xh_str_equal8(p, c0, c1, c2, c3, c4, c5, c6, c7) && (p)[8] == c8)
 
 #define xh_str_equal10(p, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9)       \
-    (*(uint32_t *) p == ((c3 << 24) | (c2 << 16) | (c1 << 8) | c0)      \
-        && ((uint32_t *) p)[1] == ((c7 << 24) | (c6 << 16) | (c5 << 8) | c4)\
-        && (((uint32_t *) p)[2] & 0xffff) == ((c9 << 8) | c8))
+    (xh_str_equal8(p, c0, c1, c2, c3, c4, c5, c6, c7) && xh_str_equal2(&p[8], c8, c9))
 
 #define xh_str_equal11(p, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10)  \
-    (*(uint32_t *) p == ((c3 << 24) | (c2 << 16) | (c1 << 8) | c0)      \
-        && ((uint32_t *) p)[1] == ((c7 << 24) | (c6 << 16) | (c5 << 8) | c4)\
-        && (((uint32_t *) p)[2] & 0xffffff) == ((c10 << 16) | (c9 << 8) | c8))
+    (xh_str_equal8(p, c0, c1, c2, c3, c4, c5, c6, c7) && xh_str_equal3(&p[8], c8, c9, c10))
+
+#define xh_str_equal12(p, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11)\
+    (xh_str_equal8(p, c0, c1, c2, c3, c4, c5, c6, c7) && xh_str_equal4(&p[8], c8, c9, c10, c11))
+
+#define xh_str_equal13(p, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12)\
+    (xh_str_equal8(p, c0, c1, c2, c3, c4, c5, c6, c7) && xh_str_equal5(&p[8], c8, c9, c10, c11, c12))
 
 
 #define xh_strcmp(s1, s2)       strcmp((const char *) (s1), (const char *) (s2))
