@@ -1,6 +1,9 @@
 Revision history for perl module XML::Hash::XS
 
-0.35    2015-04-14
+0.37    2015-04-14
+    - Fix broken archive
+
+0.36    2015-04-14
     - Fix bug with use force_array option
         - Thanks to Dmytro Zagashev for report
     - New option "force_content"
