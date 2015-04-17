@@ -62,9 +62,18 @@ Perl_get_re_arg(pTHX_ SV *sv) {
 #if __GNUC__ >= 3
 # define expect(expr,value)         __builtin_expect ((expr), (value))
 # define XH_INLINE                  static inline
+# define XH_UNUSED(v)               x __attribute__((unused))
 #else
 # define expect(expr,value)         (expr)
 # define XH_INLINE                  static
+# define XH_UNUSED(v)               v
+#endif
+
+#ifdef _MSC_VER
+#define _CRT_SECURE_NO_WARNINGS
+#define _CRT_NONSTDC_NO_DEPRECATE
+#define strncasecmp _strnicmp
+#define strcasecmp _stricmp
 #endif
 
 #define expect_false(expr) expect ((expr) != 0, 0)

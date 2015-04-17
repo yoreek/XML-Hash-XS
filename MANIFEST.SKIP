@@ -64,3 +64,4 @@ XS\.c$
 \.bs$
 \.tar\.gz$
 \bbenchmark/uploads\.rdf$
+\btools\b

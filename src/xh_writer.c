@@ -33,7 +33,7 @@ xh_writer_encode_buffer(xh_writer_t *writer, xh_perl_buffer_t *main_buf, xh_perl
     /* 1 char -> 4 chars and '\0' */
     len = (main_buf->cur - main_buf->start) * 4 + 1;
 
-    if (len > (enc_buf->end - enc_buf->cur)) {
+    if (len > (size_t) (enc_buf->end - enc_buf->cur)) {
         xh_writer_flush_buffer(writer, enc_buf);
 
         xh_perl_buffer_grow(enc_buf, len);

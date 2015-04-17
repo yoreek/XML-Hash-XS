@@ -27,7 +27,7 @@ typedef struct {
 } xh_h2x_ctx_t;
 
 XH_INLINE SV *
-xh_h2x_call_method(SV *obj, GV *method, xh_char_t *method_name)
+xh_h2x_call_method(SV *obj, GV *method)
 {
     int  count;
     SV  *result = &PL_sv_undef;

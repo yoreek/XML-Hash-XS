@@ -201,7 +201,7 @@ xh_dom_new_cdata(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, SV *value)
 }
 
 XH_INLINE void
-xh_dom_new_attribute(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, xh_char_t *name, size_t name_len, SV *value)
+xh_dom_new_attribute(xh_h2x_ctx_t *XH_UNUSED(ctx), xmlNodePtr rootNode, xh_char_t *name, size_t name_len, SV *value)
 {
     xh_char_t     *content;
     STRLEN         str_len;

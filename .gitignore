@@ -10,6 +10,7 @@
 *.tar.gz
 XS.c
 benchmark/uploads.rdf
+tools/
 
 blib/
 .build/

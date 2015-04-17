@@ -18,7 +18,7 @@ xh_buffer_grow(xh_buffer_t *buf, size_t inc)
 {
     size_t size, use;
 
-    if (inc <= (buf->end - buf->cur)) {
+    if (inc <= (size_t) (buf->end - buf->cur)) {
         return;
     }
 

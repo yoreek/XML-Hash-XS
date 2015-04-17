@@ -23,7 +23,7 @@ xh_h2x_native_attr(xh_h2x_ctx_t *ctx, xh_char_t *key, I32 key_len, SV *value, xh
         if (!(flag & XH_H2X_F_COMPLEX)) goto FINISH;
 
         while (1) {
-            item_value = xh_h2x_call_method(value, method, XH_CHAR_CAST "iternext");
+            item_value = xh_h2x_call_method(value, method);
             if (!SvOK(item_value)) break;
             (void) xh_h2x_native_attr(ctx, key, key_len, item_value, XH_H2X_F_SIMPLE | XH_H2X_F_COMPLEX);
             SvREFCNT_dec(item_value);
@@ -153,7 +153,7 @@ xh_h2d_native_attr(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, xh_char_t *key, I32 k
         if (!(flag & XH_H2X_F_COMPLEX)) goto FINISH;
 
         while (1) {
-            item_value = xh_h2x_call_method(value, method, XH_CHAR_CAST "iternext");
+            item_value = xh_h2x_call_method(value, method);
             if (!SvOK(item_value)) break;
             (void) xh_h2d_native_attr(ctx, rootNode, key, key_len, item_value, XH_H2X_F_SIMPLE | XH_H2X_F_COMPLEX);
             SvREFCNT_dec(item_value);

@@ -4,9 +4,9 @@
 #include "xh_config.h"
 #include "xh_core.h"
 
-#define XH_WRITER_RESIZE_BUFFER(w, b, l)                               \
-    if ((l) > (b->end - b->cur -1)) {                                  \
-        xh_writer_resize_buffer(w, (l) + 1);                           \
+#define XH_WRITER_RESIZE_BUFFER(w, b, l)                                \
+    if (((l) + 1) > (size_t) (b->end - b->cur)) {                       \
+        xh_writer_resize_buffer(w, (l) + 1);                            \
     }
 
 typedef struct _xh_writer_t xh_writer_t;

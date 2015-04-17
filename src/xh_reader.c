@@ -2,7 +2,7 @@
 #include "xh_core.h"
 
 static void
-xh_common_reader_init(xh_reader_t *reader, SV *input, xh_char_t *encoding, size_t buf_size)
+xh_common_reader_init(xh_reader_t *reader, SV *XH_UNUSED(input), xh_char_t *encoding, size_t buf_size)
 {
     reader->buf_size = buf_size;
 
@@ -77,7 +77,7 @@ xh_string_reader_init(xh_reader_t *reader, SV *input, xh_char_t *encoding, size_
 }
 
 static size_t
-xh_string_reader_read(xh_reader_t *reader, xh_char_t **buf, xh_char_t *preserve, size_t *off)
+xh_string_reader_read(xh_reader_t *reader, xh_char_t **buf, xh_char_t *XH_UNUSED(preserve), size_t *off)
 {
     size_t       len;
     xh_buffer_t *main_buf;
