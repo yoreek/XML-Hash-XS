@@ -4,8 +4,18 @@
 #include "xh_config.h"
 #include "xh_core.h"
 
-#define XH_X2H_NORMALIZE_REF            1
-#define XH_X2H_NORMALIZE_LINE_FEED      2
+#define XH_X2H_XPATH_MAX_LEN        1023
+
+#define XH_X2H_NORMALIZE_REF        1
+#define XH_X2H_NORMALIZE_LINE_FEED  2
+#define XH_X2H_FILTER_ENABLED       4
+#define XH_X2H_FILTER_MATCHED       8
+#define XH_X2H_ROOT_FOUND           16
+
+#define XH_X2H_NEED_NORMALIZE       (XH_X2H_NORMALIZE_REF |             \
+                                     XH_X2H_NORMALIZE_LINE_FEED)
+#define XH_X2H_FILTER_SEARCH(f)     (((f) & (XH_X2H_FILTER_ENABLED | XH_X2H_FILTER_MATCHED)) ==\
+                                     XH_X2H_FILTER_ENABLED)
 
 #define XH_X2H_PARSER_STATE_LIST                                        \
     XH_X2H_PROCESS_STATE(CONTENT_START)                                 \
@@ -71,14 +81,43 @@ typedef struct {
     xh_char_t          *tmp;
     size_t              tmp_size;
     xh_char_t          *node, *end, *content;
-    unsigned int        need_normalize;
+    unsigned int        flags;
     xh_x2h_node_t      *nodes;
     SV                **lval;
-    unsigned int        depth, code;
+    unsigned int        depth, real_depth, code;
     xh_x2h_state_t      state;
     xh_reader_t         reader;
+    SV                 *result, *input;
+    xh_char_t           xpath[XH_X2H_XPATH_MAX_LEN + 1];
 } xh_x2h_ctx_t;
 
-SV *xh_x2h(xh_x2h_ctx_t *ctx, SV *xml);
+SV *xh_x2h(xh_x2h_ctx_t *ctx);
+
+XH_INLINE void
+xh_x2h_destroy_ctx(xh_x2h_ctx_t *ctx)
+{
+    if (ctx->nodes != NULL) free(ctx->nodes);
+    if (ctx->tmp   != NULL) free(ctx->tmp);
+
+    xh_destroy_opts(&ctx->opts);
+}
+
+XH_INLINE void
+xh_x2h_init_ctx(xh_x2h_ctx_t *ctx, I32 ax, I32 items)
+{
+    xh_opts_t *opts = NULL;
+    xh_int_t   nparam = 0;
+
+    memset(ctx, 0, sizeof(xh_x2h_ctx_t));
+
+    opts = (xh_opts_t *) xh_get_obj_param(&nparam, ax, items, "XML::Hash::XS");
+    ctx->input = xh_get_str_param(&nparam, ax, items);
+    xh_merge_opts(&ctx->opts, opts, nparam, ax, items);
+
+    if ((ctx->nodes = malloc(sizeof(xh_x2h_node_t) * ctx->opts.max_depth)) == NULL) {
+        croak("Memory allocation error");
+    }
+    memset(ctx->nodes, 0, sizeof(xh_x2h_node_t) * ctx->opts.max_depth);
+}
 
 #endif /* _XH_X2H_H_ */

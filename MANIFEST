@@ -51,6 +51,7 @@ t/03-h2x-oop.t
 t/04-h2x-lx.t
 t/05-h2d-lx.t
 t/06-x2h.t
+t/07-x2h_filter.t
 t/test.xml
 t/test_cp1251.xml
 t/test_cp1251_wo_decl.xml

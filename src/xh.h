@@ -63,6 +63,8 @@ typedef struct {
     xh_pattern_t           force_array;
     xh_bool_t              force_content;
     xh_bool_t              merge_text;
+    xh_pattern_t           filter;
+    SV                    *cb;
 
     /* LX options */
     xh_char_t              attr[XH_PARAM_LEN];
@@ -78,5 +80,9 @@ void xh_destroy_opts(xh_opts_t *opts);
 xh_bool_t xh_init_opts(xh_opts_t *opts);
 void xh_parse_param(xh_opts_t *opts, xh_int_t first, I32 ax, I32 items);
 void xh_copy_opts(xh_opts_t *dst, xh_opts_t *src);
+void *xh_get_obj_param(xh_int_t *nparam, I32 ax, I32 items, char *class);
+SV *xh_get_hash_param(xh_int_t *nparam, I32 ax, I32 items);
+SV *xh_get_str_param(xh_int_t *nparam, I32 ax, I32 items);
+void xh_merge_opts(xh_opts_t *ctx_opts, xh_opts_t *opts, xh_int_t nparam, I32 ax, I32 items);
 
 #endif /* _XH_H_ */

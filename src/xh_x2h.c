@@ -3,26 +3,54 @@
 
 static const char DEF_CONTENT_KEY[] = "content";
 
-static xh_bool_t
+XH_INLINE void
+xh_x2h_xpath_update(xh_char_t *xpath, xh_char_t *name, size_t name_len)
+{
+    size_t len;
+
+    len = xh_strlen(xpath);
+    if (name != NULL) {
+        if ((len + name_len + 1) > XH_X2H_XPATH_MAX_LEN)
+            croak("XPath too long");
+
+        xpath[len++] = '/';
+        for (;name_len--;) xpath[len++] = *name++;
+    }
+    else if (len == 0) {
+        croak("Can't update xpath, something wrong!");
+    }
+    else {
+        for (;--len && xpath[len] != '/';) {/* void */}
+    }
+    xpath[len] = '\0';
+
+    xh_log_trace1("xpath: [%s]", xpath);
+}
+
+XH_INLINE xh_bool_t
 xh_x2h_match_node(xh_char_t *name, size_t name_len, SV *expr)
 {
     SSize_t    i, l;
     AV        *av;
+    SV        *fake_str;
     xh_char_t *expr_str;
     STRLEN     expr_len;
     REGEXP    *re;
 
     xh_log_trace2("match node: [%.*s]", name_len, name);
 
+    fake_str = newSV(0);
+
     if ( SvRXOK(expr) ) {
         re = (REGEXP *) SvRX(expr);
         if (re != NULL && pregexec(re, (char *) name, (char *) (name + name_len),
-            (char *) name, name_len, newSV(0), 0)
+            (char *) name, name_len, fake_str, 0)
         ) {
+            SvREFCNT_dec(fake_str);
             return TRUE;
         }
     }
-    else {
+    else if ( SvROK(expr) && SvTYPE(SvRV(expr)) == SVt_PVAV ) {
         av = (AV *) SvRV(expr);
         l  = av_len(av);
         for(i = 0; i <= l; i++) {
@@ -30,21 +58,45 @@ xh_x2h_match_node(xh_char_t *name, size_t name_len, SV *expr)
             if ( SvRXOK(expr) ) {
                 re = (REGEXP *) SvRX(expr);
                 if (re != NULL && pregexec(re, (char *) name, (char *) (name + name_len),
-                    (char *) name, name_len, newSV(0), 0)
+                    (char *) name, name_len, fake_str, 0)
                 ) {
+                    SvREFCNT_dec(fake_str);
                     return TRUE;
                 }
             }
             else {
                 expr_str = (xh_char_t *) SvPVutf8(expr, expr_len);
                 if (name_len == expr_len && !xh_strncmp(name, expr_str, name_len)) {
+                    SvREFCNT_dec(fake_str);
                     return TRUE;
                 }
             }
         }
+    } else {
+        expr_str = (xh_char_t *) SvPVutf8(expr, expr_len);
+        if (name_len == expr_len && !xh_strncmp(name, expr_str, name_len)) {
+            SvREFCNT_dec(fake_str);
+            return TRUE;
+        }
     }
 
     return FALSE;
+}
+
+XH_INLINE void
+xh_x2h_pass_matched_node(SV *cb, SV *val)
+{
+    dSP;
+
+    ENTER; SAVETMPS;
+    PUSHMARK(SP);
+    XPUSHs(val);
+    PUTBACK;
+
+    (void) call_sv(cb, G_DISCARD);
+
+    FREETMPS;
+    LEAVE;
 }
 
 #define NEW_STRING(s, l)                                                \
@@ -87,9 +139,7 @@ xh_x2h_match_node(xh_char_t *name, size_t name_len, SV *expr)
         SET_STRING((v), (s), (l));                                      \
     }                                                                   \
 
-#define OPEN_TAG(s, l)                                                  \
-    xh_log_trace2("new tag: [%.*s]", l, s);                             \
-    if (depth == 0 && nodes[1].lval != NULL) goto INVALID_XML;          \
+#define _OPEN_TAG(s, l)                                                 \
     val = *lval;                                                        \
     /* if content exists that move to hash with 'content' key */        \
     if ( !SvROK(val) || SvTYPE(SvRV(val)) == SVt_PVAV ) {               \
@@ -117,9 +167,28 @@ xh_x2h_match_node(xh_char_t *name, size_t name_len, SV *expr)
     }                                                                   \
     (s) = NULL;
 
-#define CLOSE_TAG                                                       \
-    xh_log_trace0("close tag");                                         \
-    if (depth == 0) goto INVALID_XML;                                   \
+#define OPEN_TAG(s, l)                                                  \
+    xh_log_trace2("new tag: [%.*s]", l, s);                             \
+    if (real_depth == 0) {                                              \
+        if (flags & XH_X2H_ROOT_FOUND) goto INVALID_XML;                \
+        flags |= XH_X2H_ROOT_FOUND;                                     \
+    }                                                                   \
+    if (XH_X2H_FILTER_SEARCH(flags)) {                                  \
+        xh_x2h_xpath_update(ctx->xpath, s, l);                          \
+        if (xh_x2h_match_node(ctx->xpath, xh_strlen(ctx->xpath), ctx->opts.filter.expr)) {\
+            xh_log_trace2("match node: [%.*s]", l, s);                  \
+            ctx->hash = newRV_noinc((SV *) newHV());                    \
+            nodes[0].lval = lval = &ctx->hash;                          \
+            depth = 0;                                                  \
+            flags |= XH_X2H_FILTER_MATCHED;                             \
+        }                                                               \
+    }                                                                   \
+    if (!XH_X2H_FILTER_SEARCH(flags)) {                                 \
+        _OPEN_TAG(s, l)                                                 \
+    }                                                                   \
+    real_depth++;
+
+#define _CLOSE_TAG                                                      \
     val = *nodes[depth].lval;                                           \
     if (ctx->opts.force_content && !SvROK(val)) {                       \
         lval = nodes[depth].lval;                                       \
@@ -137,10 +206,42 @@ xh_x2h_match_node(xh_char_t *name, size_t name_len, SV *expr)
     }                                                                   \
     lval = nodes[--depth].lval;
 
+#define CLOSE_TAG                                                       \
+    xh_log_trace0("close tag");                                         \
+    if (real_depth == 0) goto INVALID_XML;                              \
+    if (!XH_X2H_FILTER_SEARCH(flags)) {                                 \
+        _CLOSE_TAG                                                      \
+    }                                                                   \
+    if ((flags & XH_X2H_FILTER_MATCHED) && depth == 0) {                \
+        xh_log_trace0("match node finished");                           \
+        val = *nodes[0].lval;                                           \
+        if (!ctx->opts.keep_root) {                                     \
+            val = SvRV(val);                                            \
+            hv_iterinit((HV *) val);                                    \
+            val = hv_iterval((HV *) val, hv_iternext((HV *) val));      \
+            SvREFCNT_inc(val);                                          \
+            SvREFCNT_dec(*nodes[0].lval);                               \
+        }                                                               \
+        if (ctx->opts.cb == NULL) {                                     \
+            av_push((AV *) SvRV(ctx->result), val);                     \
+        }                                                               \
+        else {                                                          \
+            xh_x2h_pass_matched_node(ctx->opts.cb, val);                \
+            SvREFCNT_dec(val);                                          \
+        }                                                               \
+        flags ^= XH_X2H_FILTER_MATCHED;                                 \
+    }                                                                   \
+    if ((flags & (XH_X2H_FILTER_ENABLED | XH_X2H_FILTER_MATCHED)) == XH_X2H_FILTER_ENABLED) {\
+        xh_x2h_xpath_update(ctx->xpath, NULL, 0);                       \
+    }                                                                   \
+    real_depth--;
+
 #define NEW_NODE_ATTRIBUTE(k, kl, v, vl)                                \
-    OPEN_TAG(k, kl)                                                     \
-    NEW_TEXT(v, vl)                                                     \
-    CLOSE_TAG
+    if (!XH_X2H_FILTER_SEARCH(flags)) {                                 \
+        _OPEN_TAG(k, kl)                                                \
+        _NEW_TEXT(v, vl)                                                \
+        _CLOSE_TAG                                                      \
+    }
 
 #define _NEW_NODE_ATTRIBUTE(k, kl, v, vl)                               \
     xh_log_trace4("new attr name: [%.*s] value: [%.*s]", kl, k, vl, v); \
@@ -166,9 +267,7 @@ xh_x2h_match_node(xh_char_t *name, size_t name_len, SV *expr)
 
 #define NEW_ATTRIBUTE(k, kl, v, vl) NEW_NODE_ATTRIBUTE(k, kl, v, vl)
 
-#define NEW_TEXT(s, l)                                                  \
-    if (depth == 0) goto INVALID_XML;                                   \
-    xh_log_trace2("new text: [%.*s]", l, s);                            \
+#define _NEW_TEXT(s, l)                                                 \
     val = *lval;                                                        \
     if ( SvROK(val) ) {                                                 \
         xh_log_trace0("add to array");                                  \
@@ -202,6 +301,13 @@ xh_x2h_match_node(xh_char_t *name, size_t name_len, SV *expr)
         /* concatenate with previous string */                          \
         CAT_STRING(val, s, l)                                           \
     }                                                                   \
+
+#define NEW_TEXT(s, l)                                                  \
+    xh_log_trace2("new text: [%.*s]", l, s);                            \
+    if (real_depth == 0) goto INVALID_XML;                              \
+    if (!XH_X2H_FILTER_SEARCH(flags)) {                                 \
+        _NEW_TEXT(s, l)                                                 \
+    }
 
 #define NEW_COMMENT(s, l) (s) = NULL;
 
@@ -324,10 +430,10 @@ PPCAT(loop, _FINISH):
 #define SEARCH_NODE_ATTRIBUTE_VALUE(loop, top_loop, quot)               \
     EXPECT_CHAR("start attr value", quot)                               \
         content = cur;                                                  \
-        need_normalize = 0;                                             \
+        flags &= ~XH_X2H_NEED_NORMALIZE;                                \
         DO(PPCAT(loop, _END_ATTR_VALUE))                                \
             EXPECT_CHAR("attr value end", quot)                         \
-                if (need_normalize) {                                   \
+                if (flags & XH_X2H_NEED_NORMALIZE) {                    \
                     NORMALIZE_TEXT(loop, content, cur - content - 1)    \
                     NEW_ATTRIBUTE(node, end - node, enc, enc_len)       \
                 }                                                       \
@@ -336,10 +442,10 @@ PPCAT(loop, _FINISH):
                 }                                                       \
                 goto top_loop;                                          \
             EXPECT_CHAR("CR", '\r')                                     \
-                need_normalize |= XH_X2H_NORMALIZE_LINE_FEED;           \
+                flags |= XH_X2H_NORMALIZE_LINE_FEED;                    \
                 break;                                                  \
             EXPECT_CHAR("reference", '&')                               \
-                need_normalize |= XH_X2H_NORMALIZE_REF;                 \
+                flags |= XH_X2H_NORMALIZE_REF;                          \
                 break;                                                  \
         END(PPCAT(loop, _END_ATTR_VALUE))                               \
         goto INVALID_XML;
@@ -636,20 +742,21 @@ PPCAT(loop, _NORMALIZE_LINE_FEED_END):                                  \
 static void
 xh_x2h_parse_chunk(xh_x2h_ctx_t *ctx, xh_char_t **buf, size_t *bytesleft, xh_bool_t terminate)
 {
-    xh_char_t      c, *cur, *node, *end, *content, *eof, *enc,
-                  *enc_cur, *old_cur, *old_eof, *content_key;
-    unsigned int   depth, code, need_normalize;
-    int            bits;
-    SV           **lval, *val;
-    xh_x2h_node_t *nodes;
-    AV            *av;
-    size_t         enc_len, content_key_len;
+    xh_char_t          c, *cur, *node, *end, *content, *eof, *enc,
+                      *enc_cur, *old_cur, *old_eof, *content_key;
+    unsigned int       depth, real_depth, code, flags;
+    int                bits;
+    SV               **lval, *val;
+    xh_x2h_node_t     *nodes;
+    AV                *av;
+    size_t             enc_len, content_key_len;
 
     cur            = *buf;
     eof            = cur + *bytesleft;
     nodes          = ctx->nodes;
     depth          = ctx->depth;
-    need_normalize = ctx->need_normalize;
+    real_depth     = ctx->real_depth;
+    flags          = ctx->flags;
     node           = ctx->node;
     end            = ctx->end;
     content        = ctx->content;
@@ -678,11 +785,11 @@ xh_x2h_parse_chunk(xh_x2h_ctx_t *ctx, xh_char_t **buf, size_t *bytesleft, xh_boo
 
 PARSE_CONTENT:
     content = NULL;
-    need_normalize = 0;
+    flags &= ~XH_X2H_NEED_NORMALIZE;
     DO(CONTENT)
         EXPECT_CHAR("new element", '<')
             if (content != NULL) {
-                if (need_normalize) {
+                if (flags & XH_X2H_NEED_NORMALIZE) {
                     NORMALIZE_TEXT(TEXT1, content, end - content)
                     NEW_TEXT(enc, enc_len)
                 }
@@ -693,7 +800,7 @@ PARSE_CONTENT:
             }
             DO(PARSE_ELEMENT)
                 EXPECT_CHAR("xml declaration", '?')
-                    if (depth != 0) goto INVALID_XML;
+                    if (real_depth != 0) goto INVALID_XML;
 #undef  NEW_ATTRIBUTE
 #define NEW_ATTRIBUTE(k, kl, v, vl) NEW_XML_DECL_ATTRIBUTE(k, kl, v, vl)
 #undef  SEARCH_ATTRIBUTE_VALUE
@@ -763,10 +870,10 @@ PARSE_CONTENT:
         EXPECT_BLANK_WO_CR("blank")
             break;
         EXPECT_CHAR("reference", '&')
-            need_normalize |= XH_X2H_NORMALIZE_REF;
+            flags |= XH_X2H_NORMALIZE_REF;
         EXPECT_CHAR("CR", '\r')
             if (content != NULL) {
-                need_normalize |= XH_X2H_NORMALIZE_LINE_FEED;
+                flags |= XH_X2H_NORMALIZE_LINE_FEED;
             }
             break;
         EXPECT_ANY("any char")
@@ -775,7 +882,7 @@ PARSE_CONTENT:
     END(CONTENT)
 
     if (content != NULL) {
-        if (need_normalize) {
+        if (flags & XH_X2H_NEED_NORMALIZE) {
             NORMALIZE_TEXT(TEXT2, content, end - content)
             NEW_TEXT(enc, enc_len)
         }
@@ -785,7 +892,7 @@ PARSE_CONTENT:
         content = NULL;
     }
 
-    if (depth != 0 || nodes[1].lval == NULL) goto INVALID_XML;
+    if (real_depth != 0 || !(flags & XH_X2H_ROOT_FOUND)) goto INVALID_XML;
 
     ctx->state          = PARSER_ST_DONE;
     *bytesleft          = eof - cur;
@@ -799,7 +906,8 @@ CHUNK_FINISH:
     ctx->node           = node;
     ctx->end            = end;
     ctx->depth          = depth;
-    ctx->need_normalize = need_normalize;
+    ctx->real_depth     = real_depth;
+    ctx->flags          = flags;
     ctx->code           = code;
     ctx->lval           = lval;
     *bytesleft          = eof - cur;
@@ -854,35 +962,54 @@ xh_x2h_parse(xh_x2h_ctx_t *ctx, xh_reader_t *reader)
 }
 
 SV *
-xh_x2h(xh_x2h_ctx_t *ctx, SV *input)
+xh_x2h(xh_x2h_ctx_t *ctx)
 {
-    HV *hv = newHV();
+    HV *hv;
+    HE *he;
     SV *result;
 
     dXCPT;
     XCPT_TRY_START
     {
-        result = ctx->hash = newRV_noinc( (SV *) hv );
-        ctx->nodes[0].lval = ctx->lval = &ctx->hash;
+        if (ctx->opts.filter.enable) {
+            ctx->flags |= XH_X2H_FILTER_ENABLED;
+            if (ctx->opts.cb == NULL)
+                ctx->result = newRV_noinc((SV *) newAV());
+        }
+        else {
+            ctx->result = newRV_noinc((SV *) newHV());
+            ctx->nodes[0].lval = ctx->lval = &ctx->result;
+        }
 
-        xh_reader_init(&ctx->reader, input, ctx->opts.encoding, ctx->opts.buf_size);
+        xh_reader_init(&ctx->reader, ctx->input, ctx->opts.encoding, ctx->opts.buf_size);
 
         xh_x2h_parse(ctx, &ctx->reader);
     } XCPT_TRY_END
 
     XCPT_CATCH
     {
+        if (ctx->result != NULL) SvREFCNT_dec(ctx->result);
         xh_reader_destroy(&ctx->reader);
         XCPT_RETHROW;
     }
 
     xh_reader_destroy(&ctx->reader);
 
-    if (!ctx->opts.keep_root) {
+    result = ctx->result;
+    if (ctx->opts.filter.enable) {
+        if (ctx->opts.cb != NULL) result = NULL;
+    }
+    else if (!ctx->opts.keep_root) {
+        hv = (HV *) SvRV(result);
         hv_iterinit(hv);
-        result = hv_iterval(hv, hv_iternext(hv));
-        SvREFCNT_inc(result);
-        SvREFCNT_dec(ctx->hash);
+        if ((he = hv_iternext(hv))) {
+            result = hv_iterval(hv, he);
+            SvREFCNT_inc(result);
+        }
+        else {
+            result = NULL;
+        }
+        SvREFCNT_dec(ctx->result);
     }
 
     return result;

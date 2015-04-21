@@ -7,7 +7,7 @@ use vars qw($VERSION @EXPORT @EXPORT_OK);
 use base 'Exporter';
 @EXPORT_OK = @EXPORT = qw( hash2xml xml2hash );
 
-$VERSION = '0.37';
+$VERSION = '0.38';
 
 require XSLoader;
 XSLoader::load('XML::Hash::XS', $VERSION);
@@ -257,6 +257,45 @@ Buffer size for reading end encoding data.
 =item keep_root [ = 0 ] I<# xml2hash>
 
 Keep root element.
+
+=item filter [ = undef ] I<# xml2hash>
+
+Filter nodes matched by pattern and return reference to array of nodes.
+
+Sample:
+
+    my $xml = <<'XML';
+        <root>
+           <item1>111</item1>
+           <item2>222</item2>
+           <item3>333</item3>
+        </root>
+    XML
+
+    my $nodes = xml2hash($xml, filter => '/root/item1');
+    # $nodes = [ 111 ]
+
+    my $nodes = xml2hash($xml, filter => ['/root/item1', '/root/item2']);
+    # $nodes = [ 111, 222 ]
+
+    my $nodes = xml2hash($xml, filter => qr[/root/item\d$]);
+    # $nodes = [ 111, 222, 333 ]
+
+It may be used to parse large XML because does not require a lot of memory.
+
+=item cb [ = undef ] I<# xml2hash>
+
+This option is used in conjunction with "filter" option and defines callback
+that will called for each matched node.
+
+Sample:
+
+    xml2hash($xml, filter => qr[/root/item\d$], cb => sub {
+        print $_[0], "\n";
+    });
+    # 111
+    # 222
+    # 333
 
 =item method [ = 'NATIVE' ] I<# hash2xml>
 

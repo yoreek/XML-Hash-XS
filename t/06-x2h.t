@@ -2,7 +2,7 @@ package main;
 use strict;
 use warnings;
 
-use Test::More tests => 34;
+use Test::More tests => 38;
 use Data::Dumper;
 $Data::Dumper::Indent = 0;
 $Data::Dumper::Sortkeys = 1;
@@ -522,6 +522,27 @@ XML
         'use merge_text option',
     ;
 }
+
+{
+    eval { xml2hash("<root></root><root2></root2>") };
+    ok($@, 'invalid xml');
+}
+
+{
+    eval { xml2hash("<root></root><root2>") };
+    ok($@, 'invalid xml2');
+}
+
+{
+    eval { xml2hash("</root>") };
+    ok($@, 'invalid xml3');
+}
+
+{
+    eval { xml2hash("<root></root>text") };
+    ok($@, 'invalid xml4');
+}
+
 
 package MyReader;
 use base 'Tie::Handle';

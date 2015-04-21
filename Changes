@@ -1,5 +1,10 @@
 Revision history for perl module XML::Hash::XS
 
+0.38    2015-04-21
+    - New options "filter" and "cb"
+    - Fix some memory leaks bugs
+    - Fix compilation errors with using -Wextra
+
 0.37    2015-04-14
     - Fix broken archive
 

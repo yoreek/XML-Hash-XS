@@ -33,72 +33,38 @@ new(CLASS,...)
 SV *
 hash2xml(...)
     PREINIT:
-        xh_opts_t    *opts = NULL;
         xh_h2x_ctx_t  ctx;
-        SV           *param, *hash, *result;
-        xh_int_t      nparam    = 0;
+        SV           *result;
     CODE:
-        /* get object reference */
-        if (nparam >= items)
-            croak("Invalid parameters");
-        param = ST(nparam);
-        if ( sv_derived_from(param, "XML::Hash::XS") ) {
-            if ( sv_isobject(param) ) {
-                /* reference to object */
-                IV tmp = SvIV((SV *) SvRV(param));
-                opts = INT2PTR(xh_opts_t *, tmp);
-            }
-            nparam++;
-        }
+        dXCPT;
+        XCPT_TRY_START
+        {
+            xh_h2x_init_ctx(&ctx, ax, items);
 
-        /* get hash reference */
-        if (nparam >= items)
-            croak("Invalid parameters");
-        param = ST(nparam);
-        if (SvROK(param) && SvTYPE(SvRV(param)) == SVt_PVHV) {
-            hash = param;
-            nparam++;
-        }
-        else {
-            croak("Parameter is not hash reference");
-        }
-
-        /* parse options */
-        memset(&ctx, 0, sizeof(xh_h2x_ctx_t));
-        if (opts == NULL) {
-            /* read global options */
-            xh_init_opts(&ctx.opts);
-        }
-        else {
-            /* copy options from object */
-            xh_copy_opts(&ctx.opts, opts);
-        }
-        if (nparam < items) {
-            xh_parse_param(&ctx.opts, nparam, ax, items);
-        }
-
-        /* run */
+            /* hack */
 #ifdef XH_HAVE_DOM
-        if (ctx.opts.doc) {
-            result = xh_h2d(&ctx, hash);
-        }
-        else {
-            result = xh_h2x(&ctx, hash);
-        }
+            if (ctx.opts.doc) {
+                result = xh_h2d(&ctx);
+            }
+            else {
+                result = xh_h2x(&ctx);
+            }
 #else
-        result = xh_h2x(&ctx, hash);
+            result = xh_h2x(&ctx);
 #endif
+        } XCPT_TRY_END
 
-        xh_destroy_opts(&ctx.opts);
-
-        if (ctx.opts.output != NULL) {
-            XSRETURN_UNDEF;
+        XCPT_CATCH
+        {
+            xh_h2x_destroy_ctx(&ctx);
+            XCPT_RETHROW;
         }
 
-        if (result == NULL) {
-            warn("Failed to convert");
-            XSRETURN_UNDEF;
-        }
+        if (ctx.opts.output != NULL) result = NULL;
+
+        xh_h2x_destroy_ctx(&ctx);
+
+        if (result == NULL) XSRETURN_UNDEF;
 
         RETVAL = result;
 
@@ -108,71 +74,28 @@ hash2xml(...)
 SV *
 xml2hash(...)
     PREINIT:
-        xh_opts_t     *opts = NULL;
         xh_x2h_ctx_t   ctx;
-        SV            *param, *result, *input;
-        xh_int_t       nparam = 0;
+        SV            *result;
     CODE:
-        /* get object reference */
-        if (nparam >= items)
-            croak("Invalid parameters");
-        param = ST(nparam);
-        if ( sv_derived_from(param, "XML::Hash::XS") ) {
-            if ( sv_isobject(param) ) {
-                /* reference to object */
-                IV tmp = SvIV((SV *) SvRV(param));
-                opts = INT2PTR(xh_opts_t *, tmp);
-            }
-            nparam++;
+        dXCPT;
+        XCPT_TRY_START
+        {
+            xh_x2h_init_ctx(&ctx, ax, items);
+
+            result = xh_x2h(&ctx);
+        } XCPT_TRY_END
+
+        XCPT_CATCH
+        {
+            xh_x2h_destroy_ctx(&ctx);
+            XCPT_RETHROW;
         }
 
-        /* get xml as string or file name */
-        if (nparam >= items)
-            croak("Invalid parameters");
-        param = ST(nparam);
-        if (SvROK(param))
-            param = SvRV(param);
-        if (!SvOK(param))
-            croak("Invalid parameters");
-        if (!SvPOK(param) && SvTYPE(param) != SVt_PVGV)
-            croak("Invalid parameters");
-        input = param;
-        nparam++;
+        if (ctx.opts.cb != NULL) result = NULL;
 
-        /* parse options */
-        memset(&ctx, 0, sizeof(xh_x2h_ctx_t));
-        if (opts == NULL) {
-            /* read global options */
-            xh_init_opts(&ctx.opts);
-        }
-        else {
-            /* copy options from object */
-            xh_copy_opts(&ctx.opts, opts);
-        }
-        if (nparam < items) {
-            xh_parse_param(&ctx.opts, nparam, ax, items);
-        }
+        xh_x2h_destroy_ctx(&ctx);
 
-        ctx.nodes = malloc(sizeof(xh_x2h_node_t) * ctx.opts.max_depth);
-        memset(ctx.nodes, 0, sizeof(xh_x2h_node_t) * ctx.opts.max_depth);
-
-        result = xh_x2h(&ctx, input);
-
-        free(ctx.nodes);
-
-        if (ctx.tmp != NULL)
-            free(ctx.tmp);
-
-        if (ctx.opts.output != NULL) {
-            XSRETURN_UNDEF;
-        }
-
-        xh_destroy_opts(&ctx.opts);
-
-        if (result == NULL) {
-            warn("Failed to convert");
-            XSRETURN_UNDEF;
-        }
+        if (result == NULL) XSRETURN_UNDEF;
 
         RETVAL = result;
 

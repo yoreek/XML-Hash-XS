@@ -14,6 +14,8 @@ void xh_param_assign_string(xh_char_t param[], SV *value);
 void xh_param_assign_int(xh_char_t *name, xh_int_t *param, SV *value);
 xh_bool_t xh_param_assign_bool(SV *value);
 void xh_param_assign_pattern(xh_pattern_t *param, SV *value);
+void xh_param_assign_filter(xh_pattern_t *param, SV *value);
+SV *xh_param_assign_cb(char *name, SV *value);
 
 #define XH_PARAM_LEN 32
 

@@ -2,7 +2,7 @@
 #include "xh_core.h"
 
 SV *
-xh_h2x(xh_h2x_ctx_t *ctx, SV *hash)
+xh_h2x(xh_h2x_ctx_t *ctx)
 {
     SV *result;
 
@@ -19,13 +19,13 @@ xh_h2x(xh_h2x_ctx_t *ctx, SV *hash)
 
         switch (ctx->opts.method) {
             case XH_METHOD_NATIVE:
-                xh_h2x_native(ctx, ctx->opts.root, xh_strlen(ctx->opts.root), SvRV(hash));
+                xh_h2x_native(ctx, ctx->opts.root, xh_strlen(ctx->opts.root), SvRV(ctx->hash));
                 break;
             case XH_METHOD_NATIVE_ATTR_MODE:
-                (void) xh_h2x_native_attr(ctx, ctx->opts.root, xh_strlen(ctx->opts.root), SvRV(hash), XH_H2X_F_COMPLEX);
+                (void) xh_h2x_native_attr(ctx, ctx->opts.root, xh_strlen(ctx->opts.root), SvRV(ctx->hash), XH_H2X_F_COMPLEX);
                 break;
             case XH_METHOD_LX:
-                xh_h2x_lx(ctx, hash, XH_H2X_F_NONE);
+                xh_h2x_lx(ctx, ctx->hash, XH_H2X_F_NONE);
                 break;
             default:
                 croak("Invalid method");
@@ -35,6 +35,10 @@ xh_h2x(xh_h2x_ctx_t *ctx, SV *hash)
     XCPT_CATCH
     {
         xh_stash_clean(&ctx->stash);
+        result = xh_writer_flush(&ctx->writer);
+        if (result != NULL && result != &PL_sv_undef) {
+            SvREFCNT_dec(result);
+        }
         xh_writer_destroy(&ctx->writer);
         XCPT_RETHROW;
     }
@@ -57,7 +61,7 @@ xh_h2x(xh_h2x_ctx_t *ctx, SV *hash)
 
 #ifdef XH_HAVE_DOM
 SV *
-xh_h2d(xh_h2x_ctx_t *ctx, SV *hash)
+xh_h2d(xh_h2x_ctx_t *ctx)
 {
     dXCPT;
 
@@ -77,13 +81,13 @@ xh_h2d(xh_h2x_ctx_t *ctx, SV *hash)
         xh_stack_init(&ctx->stash, XH_H2X_STASH_SIZE, sizeof(SV *));
         switch (ctx->opts.method) {
             case XH_METHOD_NATIVE:
-                xh_h2d_native(ctx, (xmlNodePtr) doc, ctx->opts.root, xh_strlen(ctx->opts.root), SvRV(hash));
+                xh_h2d_native(ctx, (xmlNodePtr) doc, ctx->opts.root, xh_strlen(ctx->opts.root), SvRV(ctx->hash));
                 break;
             case XH_METHOD_NATIVE_ATTR_MODE:
-                (void) xh_h2d_native_attr(ctx, (xmlNodePtr) doc, ctx->opts.root, xh_strlen(ctx->opts.root), SvRV(hash), XH_H2X_F_COMPLEX);
+                (void) xh_h2d_native_attr(ctx, (xmlNodePtr) doc, ctx->opts.root, xh_strlen(ctx->opts.root), SvRV(ctx->hash), XH_H2X_F_COMPLEX);
                 break;
             case XH_METHOD_LX:
-                xh_h2d_lx(ctx, (xmlNodePtr) doc, hash, XH_H2X_F_NONE);
+                xh_h2d_lx(ctx, (xmlNodePtr) doc, ctx->hash, XH_H2X_F_NONE);
                 break;
             default:
                 croak("Invalid method");

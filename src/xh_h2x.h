@@ -24,6 +24,7 @@ typedef struct {
     xh_int_t     depth;
     xh_writer_t  writer;
     xh_stack_t   stash;
+    SV          *hash;
 } xh_h2x_ctx_t;
 
 XH_INLINE SV *
@@ -144,16 +145,35 @@ xh_h2x_resolve_value(xh_h2x_ctx_t *ctx, SV *value, xh_uint_t *type)
     return value;
 }
 
-SV *xh_h2x(xh_h2x_ctx_t *ctx, SV *hash);
+SV *xh_h2x(xh_h2x_ctx_t *ctx);
 void xh_h2x_native(xh_h2x_ctx_t *ctx, xh_char_t *key, I32 key_len, SV *value);
 xh_int_t xh_h2x_native_attr(xh_h2x_ctx_t *ctx, xh_char_t *key, I32 key_len, SV *value, xh_int_t flag);
 void xh_h2x_lx(xh_h2x_ctx_t *ctx, SV *value, xh_int_t flag);
 
 #ifdef XH_HAVE_DOM
-SV *xh_h2d(xh_h2x_ctx_t *ctx, SV *hash);
+SV *xh_h2d(xh_h2x_ctx_t *ctx);
 void xh_h2d_native(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, xh_char_t *key, I32 key_len, SV *value);
 xh_int_t xh_h2d_native_attr(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, xh_char_t *key, I32 key_len, SV *value, xh_int_t flag);
 void xh_h2d_lx(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, SV *value, xh_int_t flag);
 #endif
+
+XH_INLINE void
+xh_h2x_destroy_ctx(xh_h2x_ctx_t *ctx)
+{
+    xh_destroy_opts(&ctx->opts);
+}
+
+XH_INLINE void
+xh_h2x_init_ctx(xh_h2x_ctx_t *ctx, I32 ax, I32 items)
+{
+    xh_opts_t *opts = NULL;
+    xh_int_t   nparam = 0;
+
+    memset(ctx, 0, sizeof(xh_h2x_ctx_t));
+
+    opts = (xh_opts_t *) xh_get_obj_param(&nparam, ax, items, "XML::Hash::XS");
+    ctx->hash = xh_get_hash_param(&nparam, ax, items);
+    xh_merge_opts(&ctx->opts, opts, nparam, ax, items);
+}
 
 #endif /* _XH_H2X_H_ */

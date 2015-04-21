@@ -76,9 +76,14 @@ xh_create_opts(void)
 void
 xh_destroy_opts(xh_opts_t *opts)
 {
-    if (opts->force_array.expr != NULL) {
+    if (opts->force_array.expr != NULL)
         SvREFCNT_dec(opts->force_array.expr);
-    }
+
+    if (opts->filter.expr != NULL)
+        SvREFCNT_dec(opts->filter.expr);
+
+    if (opts->cb != NULL)
+        SvREFCNT_dec(opts->cb);
 }
 
 void
@@ -113,6 +118,12 @@ xh_parse_param(xh_opts_t *opts, xh_int_t first, I32 ax, I32 items)
         v = ST(i + 1);
 
         switch (len) {
+            case 2:
+                if (xh_str_equal2(p, 'c', 'b')) {
+                    opts->cb = xh_param_assign_cb("cb", v);
+                    break;
+                }
+                goto error;
 #ifdef XH_HAVE_DOM
             case 3:
                 if (xh_str_equal3(p, 'd', 'o', 'c')) {
@@ -196,6 +207,10 @@ xh_parse_param(xh_opts_t *opts, xh_int_t first, I32 ax, I32 items)
                     }
                     break;
                 }
+                if (xh_str_equal6(p, 'f', 'i', 'l', 't', 'e', 'r')) {
+                    xh_param_assign_filter(&opts->filter, v);
+                    break;
+                }
                 goto error;
             case 7:
                 if (xh_str_equal7(p, 'c', 'o', 'n', 't', 'e', 'n', 't')) {
@@ -277,3 +292,82 @@ error_value:
 error:
     croak("Invalid parameter '%s'", p);
 }
+
+void *
+xh_get_obj_param(xh_int_t *nparam, I32 ax, I32 items, char *class)
+{
+    SV   *param;
+    void *obj = NULL;
+
+    if (*nparam >= items)
+        croak("Invalid parameters");
+
+    param = ST(*nparam);
+    if ( sv_derived_from(param, class) ) {
+        if ( sv_isobject(param) ) {
+            /* reference to object */
+            IV tmp = SvIV((SV *) SvRV(param));
+            obj = INT2PTR(xh_opts_t *, tmp);
+        }
+        (*nparam)++;
+    }
+
+    return obj;
+}
+
+SV *
+xh_get_hash_param(xh_int_t *nparam, I32 ax, I32 items)
+{
+    SV   *param;
+
+    if (*nparam >= items)
+        croak("Invalid parameters");
+
+    param = ST(*nparam);
+    if (!SvROK(param) || SvTYPE(SvRV(param)) != SVt_PVHV)
+        croak("Parameter is not hash reference");
+
+    (*nparam)++;
+
+    return param;
+}
+
+SV *
+xh_get_str_param(xh_int_t *nparam, I32 ax, I32 items)
+{
+    SV   *param;
+
+    if (*nparam >= items)
+        croak("Invalid parameters");
+
+    param = ST(*nparam);
+    if (SvROK(param))
+        param = SvRV(param);
+
+    if (!SvOK(param))
+        croak("Invalid parameters");
+
+    if (!SvPOK(param) && SvTYPE(param) != SVt_PVGV)
+        croak("Invalid parameters");
+
+    (*nparam)++;
+
+    return param;
+}
+
+void
+xh_merge_opts(xh_opts_t *ctx_opts, xh_opts_t *opts, xh_int_t nparam, I32 ax, I32 items)
+{
+    if (opts == NULL) {
+        /* read global options */
+        xh_init_opts(ctx_opts);
+    }
+    else {
+        /* copy options from object */
+        xh_copy_opts(ctx_opts, opts);
+    }
+    if (nparam < items) {
+        xh_parse_param(ctx_opts, nparam, ax, items);
+    }
+}
+
