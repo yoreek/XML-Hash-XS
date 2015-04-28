@@ -7,7 +7,7 @@ use vars qw($VERSION @EXPORT @EXPORT_OK);
 use base 'Exporter';
 @EXPORT_OK = @EXPORT = qw( hash2xml xml2hash );
 
-$VERSION = '0.38';
+$VERSION = '0.39';
 
 require XSLoader;
 XSLoader::load('XML::Hash::XS', $VERSION);
@@ -50,7 +50,7 @@ $comm          = undef;
 __END__
 =head1 NAME
 
-XML::Hash::XS - Simple and fast hash to XML conversion written in C
+XML::Hash::XS - Simple and fast hash to XML and XML to hash conversion written in C
 
 =begin HTML
 

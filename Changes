@@ -1,5 +1,9 @@
 Revision history for perl module XML::Hash::XS
 
+0.39    2015-04-28
+    - Improved XML detection
+        - Thanks to Phillup for report
+
 0.38    2015-04-21
     - New options "filter" and "cb"
     - Fix some memory leaks bugs

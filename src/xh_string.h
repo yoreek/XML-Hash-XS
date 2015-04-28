@@ -91,4 +91,15 @@ xh_memmove(xh_char_t *dest, const xh_char_t *src, size_t n)
     while (n--) *dest++ = *src++;
 }
 
+XH_INLINE xh_bool_t
+xh_str_is_xml(xh_char_t *s)
+{
+    xh_char_t ch;
+
+    while ((ch = *s++) == ' ' || ch =='\t' || ch == '\n' || ch == '\r');
+    if (ch == '<') return TRUE;
+
+    return FALSE;
+}
+
 #endif /* _XH_STRING_H_ */

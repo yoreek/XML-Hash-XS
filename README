@@ -1,5 +1,6 @@
 NAME
-    XML::Hash::XS - Simple and fast hash to XML conversion written in C
+    XML::Hash::XS - Simple and fast hash to XML and XML to hash conversion
+    written in C
 
 SYNOPSIS
         use XML::Hash::XS;

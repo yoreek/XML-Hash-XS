@@ -680,7 +680,7 @@ xh_reader_init(xh_reader_t *reader, SV *input, xh_char_t *encoding, size_t buf_s
             croak("String is empty");
 
         /* Parsing string */
-        if (str[0] == '<') {
+        if (xh_str_is_xml(str)) {
             reader->type            = XH_READER_STRING_TYPE;
             reader->init            = xh_string_reader_init;
             reader->read            = xh_string_reader_read;

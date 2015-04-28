@@ -2,7 +2,7 @@ package main;
 use strict;
 use warnings;
 
-use Test::More tests => 38;
+use Test::More tests => 39;
 use Data::Dumper;
 $Data::Dumper::Indent = 0;
 $Data::Dumper::Sortkeys = 1;
@@ -541,6 +541,14 @@ XML
 {
     eval { xml2hash("<root></root>text") };
     ok($@, 'invalid xml4');
+}
+
+{
+    is
+        xml2hash(" \r\n\t<root>boom</root>"),
+        'boom',
+        'ignore leading white spaces',
+    ;
 }
 
 
