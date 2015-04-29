@@ -1,5 +1,10 @@
 Revision history for perl module XML::Hash::XS
 
+0.40    2015-04-30
+    - Fix memory allocation bug
+        - Thanks to Phillup for report
+    - Fix compilation on OpenBSD/NetBSD
+
 0.39    2015-04-28
     - Improved XML detection
         - Thanks to Phillup for report

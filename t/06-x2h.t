@@ -2,7 +2,7 @@ package main;
 use strict;
 use warnings;
 
-use Test::More tests => 39;
+use Test::More tests => 40;
 use Data::Dumper;
 $Data::Dumper::Indent = 0;
 $Data::Dumper::Sortkeys = 1;
@@ -551,6 +551,27 @@ XML
     ;
 }
 
+{
+    is
+        Dumper(xml2hash(<<"XML")),
+<root>
+    <row>
+        <cell text="test&apos;s"/>
+    </row>
+    <row>
+        <cell text=" test&apos;s"/>
+    </row>
+</root>
+XML
+        Dumper({
+            row => [
+                {cell => {'text' => "test's"}},
+                {cell => {'text' => " test's"}},
+            ],
+        }),
+        'memory allocation bug',
+    ;
+}
 
 package MyReader;
 use base 'Tie::Handle';

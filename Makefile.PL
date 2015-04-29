@@ -176,6 +176,15 @@ sub extra_config {
     $summary_config{CCFLAGS} .= ' -DWITH_TRACE'
         if $PARAMS{DEBUG} && $PARAMS{TRACE};
 
+    # On OpenBSD, any program that directly or indirectly wants to load
+    # libpthread.so must do so from the start.  But when perl is built without
+    # ithreads, it will also most likely not be compiled with "-pthread".  When
+    # libglib/libgobject then go and try to load libpthread.so, the loader will
+    # error out.
+    if ($^O =~ /^openbsd|netbsd$/ && $Config::Config{ldflags} !~ m/-pthread\b/) {
+        ($summary_config{LIBS} ||= '') .= ' -lpthread';
+    }
+
     return %summary_config;
 }
 

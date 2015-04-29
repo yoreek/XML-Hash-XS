@@ -713,10 +713,15 @@ PPCAT(loop, _NORMALIZE_LINE_FEED_END):                                  \
         old_eof = eof;                                                  \
         cur     = s;                                                    \
         eof     = cur + enc_len;                                        \
-        if (ctx->tmp != NULL && enc_len > ctx->tmp_size) free(ctx->tmp);\
         if (ctx->tmp == NULL) {                                         \
             xh_log_trace1("malloc() %lu", enc_len);                     \
             if ((ctx->tmp = malloc(enc_len)) == NULL) goto MALLOC;      \
+            ctx->tmp_size = enc_len;                                    \
+        }                                                               \
+        else if (enc_len > ctx->tmp_size) {                             \
+            xh_log_trace1("realloc() %lu", enc_len);                    \
+            if ((enc = realloc(ctx->tmp, enc_len)) == NULL) goto MALLOC;\
+            ctx->tmp = enc;                                             \
             ctx->tmp_size = enc_len;                                    \
         }                                                               \
         enc = enc_cur = ctx->tmp;                                       \
