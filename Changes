@@ -1,5 +1,8 @@
 Revision history for perl module XML::Hash::XS
 
+0.41    2015-04-30
+    - Fix bug in parsing entity references
+
 0.40    2015-04-30
     - Fix memory allocation bug
         - Thanks to Phillup for report

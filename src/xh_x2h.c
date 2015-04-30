@@ -874,13 +874,13 @@ PARSE_CONTENT:
             goto INVALID_XML;
         EXPECT_BLANK_WO_CR("blank")
             break;
-        EXPECT_CHAR("reference", '&')
-            flags |= XH_X2H_NORMALIZE_REF;
         EXPECT_CHAR("CR", '\r')
             if (content != NULL) {
                 flags |= XH_X2H_NORMALIZE_LINE_FEED;
             }
             break;
+        EXPECT_CHAR("reference", '&')
+            flags |= XH_X2H_NORMALIZE_REF;
         EXPECT_ANY("any char")
             if (content == NULL) content = cur - 1;
             end = cur;

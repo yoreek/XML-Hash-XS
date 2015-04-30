@@ -53,8 +53,8 @@ our $xml_decl_utf8 = qq{<?xml version="1.0" encoding="utf-8"?>};
 
 {
     is
-        xml2hash('<root>abc&#160;def&amp;&lt;&gt;&quot;&apos;</root>', utf8 => 0),
-        "abc\302\240def&<>\"'",
+        xml2hash('<root>&amp;abc&#160;def&amp;&lt;&gt;&quot;&apos;</root>', utf8 => 0),
+        "&abc\302\240def&<>\"'",
         'reference in text',
     ;
 }
