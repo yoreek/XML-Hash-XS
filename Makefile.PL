@@ -176,13 +176,18 @@ sub extra_config {
     $summary_config{CCFLAGS} .= ' -DWITH_TRACE'
         if $PARAMS{DEBUG} && $PARAMS{TRACE};
 
+    # Fix from Glib module.
     # On OpenBSD, any program that directly or indirectly wants to load
     # libpthread.so must do so from the start.  But when perl is built without
     # ithreads, it will also most likely not be compiled with "-pthread".  When
     # libglib/libgobject then go and try to load libpthread.so, the loader will
     # error out.
-    if ($^O =~ /^openbsd|netbsd$/ && $Config::Config{ldflags} !~ m/-pthread\b/) {
-        ($summary_config{LIBS} ||= '') .= ' -lpthread';
+    if ($^O =~ /^openbsd|netbsd$/
+        && $Config::Config{ldflags} !~ m/-pthread\b/
+        && $Config::Config{ccflags} !~ m/-pthread\b/) {
+        warn " ***\n *** on OpenBSD, we either need perl linked with '-pthread',\n",
+             " ***   or we need to set LD_PRELOAD=libpthread.so; doing the latter now...\n ***\n";
+        $summary_config{macro} = { FULLPERLRUN => 'LD_PRELOAD=/usr/lib/libpthread.so $(FULLPERL)' };
     }
 
     return %summary_config;
