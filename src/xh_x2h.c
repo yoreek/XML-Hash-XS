@@ -36,18 +36,19 @@ xh_x2h_match_node(xh_char_t *name, size_t name_len, SV *expr)
     xh_char_t *expr_str;
     STRLEN     expr_len;
     REGEXP    *re;
+    xh_bool_t  matched;
 
     xh_log_trace2("match node: [%.*s]", name_len, name);
 
     fake_str = newSV(0);
+    matched  = TRUE;
 
     if ( SvRXOK(expr) ) {
         re = (REGEXP *) SvRX(expr);
         if (re != NULL && pregexec(re, (char *) name, (char *) (name + name_len),
             (char *) name, name_len, fake_str, 0)
         ) {
-            SvREFCNT_dec(fake_str);
-            return TRUE;
+            goto MATCHED;
         }
     }
     else if ( SvROK(expr) && SvTYPE(SvRV(expr)) == SVt_PVAV ) {
@@ -60,27 +61,29 @@ xh_x2h_match_node(xh_char_t *name, size_t name_len, SV *expr)
                 if (re != NULL && pregexec(re, (char *) name, (char *) (name + name_len),
                     (char *) name, name_len, fake_str, 0)
                 ) {
-                    SvREFCNT_dec(fake_str);
-                    return TRUE;
+                    goto MATCHED;
                 }
             }
             else {
                 expr_str = (xh_char_t *) SvPVutf8(expr, expr_len);
                 if (name_len == expr_len && !xh_strncmp(name, expr_str, name_len)) {
-                    SvREFCNT_dec(fake_str);
-                    return TRUE;
+                    goto MATCHED;
                 }
             }
         }
     } else {
         expr_str = (xh_char_t *) SvPVutf8(expr, expr_len);
         if (name_len == expr_len && !xh_strncmp(name, expr_str, name_len)) {
-            SvREFCNT_dec(fake_str);
-            return TRUE;
+            goto MATCHED;
         }
     }
 
-    return FALSE;
+    matched = FALSE;
+
+MATCHED:
+    SvREFCNT_dec(fake_str);
+
+    return matched;
 }
 
 XH_INLINE void
