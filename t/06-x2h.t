@@ -2,7 +2,7 @@ package main;
 use strict;
 use warnings;
 
-use Test::More tests => 40;
+use Test::More tests => 41;
 use Data::Dumper;
 $Data::Dumper::Indent = 0;
 $Data::Dumper::Sortkeys = 1;
@@ -571,6 +571,11 @@ XML
         }),
         'memory allocation bug',
     ;
+}
+
+{
+    eval { xml2hash('t/test_null_terminated.xml') };
+    ok(!$@, 'null-terminated file');
 }
 
 package MyReader;

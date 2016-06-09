@@ -7,7 +7,7 @@ use vars qw($VERSION @EXPORT @EXPORT_OK);
 use base 'Exporter';
 @EXPORT_OK = @EXPORT = qw( hash2xml xml2hash );
 
-$VERSION = '0.43';
+$VERSION = '0.44';
 
 require XSLoader;
 XSLoader::load('XML::Hash::XS', $VERSION);
@@ -383,7 +383,7 @@ Yuriy Ustushenko, E<lt>yoreek@yahoo.comE<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2012-2015 Yuriy Ustushenko
+Copyright (C) 2012-2016 Yuriy Ustushenko
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

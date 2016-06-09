@@ -317,14 +317,15 @@ xh_x2h_pass_matched_node(SV *cb, SV *val)
 #define NEW_CDATA(s, l) NEW_TEXT(s, l)
 
 #define CHECK_EOF_WITH_CHUNK(loop)                                      \
-    if (cur >= eof) {                                                   \
+    if (cur >= eof || *cur == '\0') {                                   \
+        eof = cur;                                                      \
         if (terminate) goto PPCAT(loop, _FINISH);                       \
         ctx->state = PPCAT(loop, _START);                               \
         goto CHUNK_FINISH;                                              \
     }                                                                   \
 
 #define CHECK_EOF_WITHOUT_CHUNK(loop)                                   \
-    if (cur >= eof) goto PPCAT(loop, _FINISH);                          \
+    if (cur >= eof || *cur == '\0') goto PPCAT(loop, _FINISH);          \
 
 #define CHECK_EOF(loop) CHECK_EOF_WITH_CHUNK(loop)
 
@@ -333,14 +334,14 @@ PPCAT(loop, _START):                                                    \
     CHECK_EOF(loop)                                                     \
     c = *cur++;                                                         \
     xh_log_trace3("'%c'=[0x%X] %s start", c, c, STRINGIZE(loop));       \
-    switch (c) { case '\0': goto PPCAT(loop, _FINISH);
+    switch (c) {
 
 #define _DO(loop)                                                       \
 PPCAT(loop, _START):                                                    \
     CHECK_EOF_WITHOUT_CHUNK(loop)                                       \
     c = *cur++;                                                         \
     xh_log_trace3("'%c'=[0x%X] %s start", c, c, STRINGIZE(loop));       \
-    switch (c) { case '\0': goto PPCAT(loop, _FINISH);
+    switch (c) {
 
 #define END(loop)                                                       \
     }                                                                   \

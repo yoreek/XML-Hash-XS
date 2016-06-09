@@ -1,5 +1,9 @@
 Revision history for perl module XML::Hash::XS
 
+0.44    2016-06-09
+    - Fix bug with null-terminated xml
+        - Thanks to Zdm for report
+
 0.43    2015-07-15
     - Fix memory allocation bug
         - Thanks to Jeffrey Ryan Thalhammer for report

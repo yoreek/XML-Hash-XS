@@ -55,6 +55,7 @@ t/07-x2h_filter.t
 t/test.xml
 t/test_cp1251.xml
 t/test_cp1251_wo_decl.xml
+t/test_null_terminated.xml
 t/test_utf8.xml
 typemap
 XS.xs
