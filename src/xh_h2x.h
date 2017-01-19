@@ -148,13 +148,13 @@ xh_h2x_resolve_value(xh_h2x_ctx_t *ctx, SV *value, xh_uint_t *type)
 SV *xh_h2x(xh_h2x_ctx_t *ctx);
 void xh_h2x_native(xh_h2x_ctx_t *ctx, xh_char_t *key, I32 key_len, SV *value);
 xh_int_t xh_h2x_native_attr(xh_h2x_ctx_t *ctx, xh_char_t *key, I32 key_len, SV *value, xh_int_t flag);
-void xh_h2x_lx(xh_h2x_ctx_t *ctx, SV *value, xh_int_t flag);
+void xh_h2x_lx(xh_h2x_ctx_t *ctx, SV *value, xh_char_t *key, I32 key_len, xh_int_t flag);
 
 #ifdef XH_HAVE_DOM
 SV *xh_h2d(xh_h2x_ctx_t *ctx);
 void xh_h2d_native(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, xh_char_t *key, I32 key_len, SV *value);
 xh_int_t xh_h2d_native_attr(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, xh_char_t *key, I32 key_len, SV *value, xh_int_t flag);
-void xh_h2d_lx(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, SV *value, xh_int_t flag);
+void xh_h2d_lx(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, SV *value, xh_char_t *key, I32 key_len, xh_int_t flag);
 #endif
 
 XH_INLINE void

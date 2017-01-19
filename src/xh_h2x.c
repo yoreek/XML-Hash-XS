@@ -25,7 +25,7 @@ xh_h2x(xh_h2x_ctx_t *ctx)
                 (void) xh_h2x_native_attr(ctx, ctx->opts.root, xh_strlen(ctx->opts.root), SvRV(ctx->hash), XH_H2X_F_COMPLEX);
                 break;
             case XH_METHOD_LX:
-                xh_h2x_lx(ctx, ctx->hash, XH_H2X_F_NONE);
+                xh_h2x_lx(ctx, ctx->hash, NULL, 0, XH_H2X_F_NONE);
                 break;
             default:
                 croak("Invalid method");
@@ -87,7 +87,7 @@ xh_h2d(xh_h2x_ctx_t *ctx)
                 (void) xh_h2d_native_attr(ctx, (xmlNodePtr) doc, ctx->opts.root, xh_strlen(ctx->opts.root), SvRV(ctx->hash), XH_H2X_F_COMPLEX);
                 break;
             case XH_METHOD_LX:
-                xh_h2d_lx(ctx, (xmlNodePtr) doc, ctx->hash, XH_H2X_F_NONE);
+                xh_h2d_lx(ctx, (xmlNodePtr) doc, ctx->hash, NULL, 0, XH_H2X_F_NONE);
                 break;
             default:
                 croak("Invalid method");

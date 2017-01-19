@@ -1,5 +1,9 @@
 Revision history for perl module XML::Hash::XS
 
+0.45    2017-01-19
+    - Fix incorrect folding of arrays in LX mode
+        - Thanks to Nigelm for report
+
 0.44    2016-06-09
     - Fix bug with null-terminated xml
         - Thanks to Zdm for report

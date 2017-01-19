@@ -2,9 +2,25 @@
 #include "xh_core.h"
 
 XH_INLINE void
+_xh_h2x_lx_write_complex_node(xh_h2x_ctx_t *ctx, xh_char_t *key, I32 key_len, SV *value)
+{
+    /* '<tag' */
+    xh_xml_write_start_tag(&ctx->writer, key, key_len);
+    /* ' attr1="..." attr2="..."' */
+    xh_h2x_lx(ctx, value, key, key_len, XH_H2X_F_ATTR_ONLY);
+    /* '>' */
+    xh_xml_write_end_tag(&ctx->writer);
+
+    xh_h2x_lx(ctx, value, key, key_len, XH_H2X_F_NONE);
+
+    xh_xml_write_end_node(&ctx->writer, key, key_len);
+}
+
+XH_INLINE void
 _xh_h2x_lx(xh_h2x_ctx_t *ctx, xh_char_t *key, I32 key_len, SV *value, xh_int_t flag)
 {
     xh_uint_t type;
+    size_t    len, i;
 
     value = xh_h2x_resolve_value(ctx, value, &type);
 
@@ -43,17 +59,11 @@ _xh_h2x_lx(xh_h2x_ctx_t *ctx, xh_char_t *key, I32 key_len, SV *value, xh_int_t f
         else {
             if (flag & XH_H2X_F_ATTR_ONLY) return;
 
-            if (type & XH_H2X_T_NOT_NULL) {
-                /* '<tag' */
-                xh_xml_write_start_tag(&ctx->writer, key, key_len);
-                /* ' attr1="..." attr2="..."' */
-                xh_h2x_lx(ctx, value, XH_H2X_F_ATTR_ONLY);
-                /* '>' */
-                xh_xml_write_end_tag(&ctx->writer);
-
-                xh_h2x_lx(ctx, value, XH_H2X_F_NONE);
-
-                xh_xml_write_end_node(&ctx->writer, key, key_len);
+            if (type & XH_H2X_T_ARRAY) {
+                xh_h2x_lx(ctx, value, key, key_len, XH_H2X_F_NONE);
+            }
+            else if (type & XH_H2X_T_NOT_NULL) {
+                _xh_h2x_lx_write_complex_node(ctx, key, key_len, value);
             }
             else {
                 xh_xml_write_empty_node(&ctx->writer, key, key_len);
@@ -62,13 +72,7 @@ _xh_h2x_lx(xh_h2x_ctx_t *ctx, xh_char_t *key, I32 key_len, SV *value, xh_int_t f
     }
     else {
         if (type & XH_H2X_T_NOT_NULL) {
-            /* '<tag>' */
-            xh_xml_write_start_node(&ctx->writer, key, key_len);
-
-            xh_h2x_lx(ctx, value, XH_H2X_F_NONE);
-
-            /* '</tag>' */
-            xh_xml_write_end_node(&ctx->writer, key, key_len);
+            xh_h2x_lx(ctx, value, key, key_len, XH_H2X_F_NONE);
         }
         else {
             xh_xml_write_empty_node(&ctx->writer, key, key_len);
@@ -77,11 +81,9 @@ _xh_h2x_lx(xh_h2x_ctx_t *ctx, xh_char_t *key, I32 key_len, SV *value, xh_int_t f
 }
 
 void
-xh_h2x_lx(xh_h2x_ctx_t *ctx, SV *value, xh_int_t flag)
+xh_h2x_lx(xh_h2x_ctx_t *ctx, SV *value, xh_char_t *key, I32 key_len, xh_int_t flag)
 {
     SV             *hash_value;
-    xh_char_t      *key;
-    I32             key_len;
     size_t          len, i;
     xh_uint_t       type;
     xh_sort_hash_t *sorted_hash;
@@ -110,9 +112,10 @@ xh_h2x_lx(xh_h2x_ctx_t *ctx, SV *value, xh_int_t flag)
         }
     }
     else if (type & XH_H2X_T_ARRAY) {
+        if (flag & XH_H2X_F_ATTR_ONLY) goto FINISH;
         len = av_len((AV *) value) + 1;
         for (i = 0; i < len; i++) {
-            xh_h2x_lx(ctx, *av_fetch((AV *) value, i, 0), flag);
+            _xh_h2x_lx_write_complex_node(ctx, key, key_len, *av_fetch((AV *) value, i, 0));
         }
     }
 
@@ -121,6 +124,16 @@ FINISH:
 }
 
 #ifdef XH_HAVE_DOM
+XH_INLINE void
+_xh_h2d_lx_write_complex_node(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, xh_char_t *key, I32 key_len, SV *value)
+{
+    //rootNode = xh_dom_new_node(ctx, rootNode, key, key_len, NULL, type & XH_H2X_T_RAW);
+    rootNode = xh_dom_new_node(ctx, rootNode, key, key_len, NULL, XH_H2X_T_RAW);
+
+    xh_h2d_lx(ctx, rootNode, value, key, key_len, XH_H2X_F_ATTR_ONLY);
+    xh_h2d_lx(ctx, rootNode, value, key, key_len, XH_H2X_F_NONE);
+}
+
 XH_INLINE void
 _xh_h2d_lx(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, xh_char_t *key, I32 key_len, SV *value, xh_int_t flag)
 {
@@ -162,27 +175,30 @@ _xh_h2d_lx(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, xh_char_t *key, I32 key_len, 
         }
         else {
             if (flag & XH_H2X_F_ATTR_ONLY) return;
-            rootNode = xh_dom_new_node(ctx, rootNode, key, key_len, NULL, type & XH_H2X_T_RAW);
-            if (type & XH_H2X_T_NOT_NULL) {
-                xh_h2d_lx(ctx, rootNode, value, XH_H2X_F_ATTR_ONLY);
-                xh_h2d_lx(ctx, rootNode, value, XH_H2X_F_NONE);
+
+            if (type & XH_H2X_T_ARRAY) {
+                xh_h2d_lx(ctx, rootNode, value, key, key_len, XH_H2X_F_NONE);
+            }
+            else if (type & XH_H2X_T_NOT_NULL) {
+                _xh_h2d_lx_write_complex_node(ctx, rootNode, key, key_len, value);
+            }
+            else {
+                xh_dom_new_node(ctx, rootNode, key, key_len, NULL, type & XH_H2X_T_RAW);
             }
         }
     }
     else {
         rootNode = xh_dom_new_node(ctx, rootNode, key, key_len, NULL, type & XH_H2X_T_RAW);
         if (type & XH_H2X_T_NOT_NULL) {
-            xh_h2d_lx(ctx, rootNode, value, XH_H2X_F_NONE);
+            xh_h2d_lx(ctx, rootNode, value, key, key_len, XH_H2X_F_NONE);
         }
     }
 }
 
 void
-xh_h2d_lx(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, SV *value, xh_int_t flag)
+xh_h2d_lx(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, SV *value, xh_char_t *key, I32 key_len, xh_int_t flag)
 {
     SV             *hash_value;
-    xh_char_t      *key;
-    I32             key_len;
     size_t          len, i;
     xh_uint_t       type;
     xh_sort_hash_t *sorted_hash;
@@ -211,9 +227,10 @@ xh_h2d_lx(xh_h2x_ctx_t *ctx, xmlNodePtr rootNode, SV *value, xh_int_t flag)
         }
     }
     else if (type & XH_H2X_T_ARRAY) {
+        if (flag & XH_H2X_F_ATTR_ONLY) goto FINISH;
         len = av_len((AV *) value) + 1;
         for (i = 0; i < len; i++) {
-            xh_h2d_lx(ctx, rootNode, *av_fetch((AV *) value, i, 0), flag);
+            _xh_h2d_lx_write_complex_node(ctx, rootNode, key, key_len, *av_fetch((AV *) value, i, 0));
         }
     }
 
