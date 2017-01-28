@@ -7,7 +7,7 @@ use vars qw($VERSION @EXPORT @EXPORT_OK);
 use base 'Exporter';
 @EXPORT_OK = @EXPORT = qw( hash2xml xml2hash );
 
-$VERSION = '0.45';
+$VERSION = '0.46';
 
 require XSLoader;
 XSLoader::load('XML::Hash::XS', $VERSION);

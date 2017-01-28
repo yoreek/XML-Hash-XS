@@ -436,3 +436,16 @@ sub backtick {
     chomp $results;
     return $results;
 }
+
+package MY;
+
+# Fix bug occurs while using multiple job compile:
+# gcc: error: xh_buffer.c: No such file or directory
+# Replace $* to $<
+# $*: dir/file.o -> file.c
+# $<: dir/file.o -> dir/file.c
+sub c_o {
+    my $inherited = shift->SUPER::c_o(@_);
+    $inherited =~ s/\$\*.*/\$</g;
+    $inherited;
+}
