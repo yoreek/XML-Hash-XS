@@ -2,6 +2,7 @@ Revision history for perl module XML::Hash::XS
 
 0.46    2017-01-28
     - Fix bug occurs while using multiple job compile
+    - Fix configure error on OpenBSD: No library found for -liconv
 
 0.45    2017-01-19
     - Fix incorrect folding of arrays in LX mode

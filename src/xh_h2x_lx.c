@@ -20,7 +20,6 @@ XH_INLINE void
 _xh_h2x_lx(xh_h2x_ctx_t *ctx, xh_char_t *key, I32 key_len, SV *value, xh_int_t flag)
 {
     xh_uint_t type;
-    size_t    len, i;
 
     value = xh_h2x_resolve_value(ctx, value, &type);
 

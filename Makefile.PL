@@ -152,7 +152,8 @@ sub extra_config {
               } keys %{ $config{lib} || {} }
             ),
         );
-        $summary_config{LIBS} = \@libs if scalar @libs;
+        $summary_config{LIBS} = [$Config::Config{ldflags} || '', @libs]
+            if scalar @libs;
     }
 
     if ( $PARAMS{INC} ) {
