@@ -7,7 +7,7 @@ use vars qw($VERSION @EXPORT @EXPORT_OK);
 use base 'Exporter';
 @EXPORT_OK = @EXPORT = qw( hash2xml xml2hash );
 
-$VERSION = '0.46';
+$VERSION = '0.47';
 
 require XSLoader;
 XSLoader::load('XML::Hash::XS', $VERSION);
@@ -238,7 +238,7 @@ if xml_decl is "1", output will start with the XML declaration '<?xml version="1
 
 if xml_decl is "0", XML declaration will not be output.
 
-=item trim [ = 1 ] I<# hash2xml>
+=item trim [ = 0 ] I<# hash2xml+xml2hash>
 
 Trim leading and trailing whitespace from text nodes.
 

@@ -55,7 +55,7 @@ xh_str_trim(xh_char_t *s, size_t *len)
 
     end = s + *len;
 
-    while ((ch = *s++) == ' ' || ch =='\t' || ch == '\n' || ch == '\r');
+    while ((ch = *s++) == ' ' || ch == '\t' || ch == '\n' || ch == '\r');
     if (ch == '\0') {
         *len = 0;
         return s - 1;
@@ -63,7 +63,7 @@ xh_str_trim(xh_char_t *s, size_t *len)
 
     s--;
 
-    while (--end != s && ((ch = *end) == ' ' || ch =='\t' || ch == '\n' || ch == '\r'));
+    while (--end != s && ((ch = *end) == ' ' || ch == '\t' || ch == '\n' || ch == '\r'));
 
     *len = end - s + 1;
 

@@ -167,7 +167,7 @@ OPTIONS
 
         if xml_decl is "0", XML declaration will not be output.
 
-    trim [ = 1 ] *# hash2xml*
+    trim [ = 0 ] *# hash2xml+xml2hash*
         Trim leading and trailing whitespace from text nodes.
 
     utf8 [ = 1 ] *# hash2xml+xml2hash*

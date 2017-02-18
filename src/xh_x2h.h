@@ -11,6 +11,7 @@
 #define XH_X2H_FILTER_ENABLED       4
 #define XH_X2H_FILTER_MATCHED       8
 #define XH_X2H_ROOT_FOUND           16
+#define XH_X2H_IS_NOT_BLANK         32
 
 #define XH_X2H_NEED_NORMALIZE       (XH_X2H_NORMALIZE_REF |             \
                                      XH_X2H_NORMALIZE_LINE_FEED)
@@ -34,6 +35,15 @@
     XH_X2H_PROCESS_STATE(END_CDATA1_START)                              \
     XH_X2H_PROCESS_STATE(END_CDATA2_START)                              \
     XH_X2H_PROCESS_STATE(END_CDATA3_START)                              \
+    XH_X2H_PROCESS_STATE(CDATA_WITH_TRIM_1_1_START)                     \
+    XH_X2H_PROCESS_STATE(CDATA_WITH_TRIM_1_2_START)                     \
+    XH_X2H_PROCESS_STATE(CDATA_WITH_TRIM_1_3_START)                     \
+    XH_X2H_PROCESS_STATE(CDATA_WITH_TRIM_2_1_START)                     \
+    XH_X2H_PROCESS_STATE(CDATA_WITH_TRIM_2_2_START)                     \
+    XH_X2H_PROCESS_STATE(CDATA_WITH_TRIM_2_3_START)                     \
+    XH_X2H_PROCESS_STATE(END_CDATA_WITH_TRIM1_START)                    \
+    XH_X2H_PROCESS_STATE(END_CDATA_WITH_TRIM2_START)                    \
+    XH_X2H_PROCESS_STATE(END_CDATA_WITH_TRIM3_START)                    \
     XH_X2H_PROCESS_STATE(PARSE_CLOSING_TAG_START)                       \
     XH_X2H_PROCESS_STATE(SEARCH_CLOSING_END_TAG_START)                  \
     XH_X2H_PROCESS_STATE(PARSE_OPENING_TAG_START)                       \

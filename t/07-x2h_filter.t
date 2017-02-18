@@ -13,7 +13,7 @@ our $xml_decl_utf8 = qq{<?xml version="1.0" encoding="utf-8"?>};
 
 {
     is
-        Dumper(xml2hash(<<"XML", filter => '/root/node1', keep_root => 1)),
+        Dumper(xml2hash(<<"XML", filter => '/root/node1', keep_root => 1, trim => 1)),
 $xml_decl_utf8
 <root>
     <node1>value1</node1>
@@ -26,13 +26,13 @@ XML
         Dumper([
     { node1  => 'value1' },
 ]),
-        'filter1',
+        'one pattern',
     ;
 }
 
 {
     is
-        Dumper(xml2hash(<<"XML", filter => ['/root/node1', '/root/node2'], keep_root => 1)),
+        Dumper(xml2hash(<<"XML", filter => ['/root/node1', '/root/node2'], keep_root => 1, trim => 1)),
 $xml_decl_utf8
 <root>
     <node1>value1</node1>
@@ -49,13 +49,13 @@ XML
         content => 'value2',
     }},
 ]),
-        'filter2',
+        'array of patterns',
     ;
 }
 
 {
     is
-        Dumper(xml2hash(<<"XML", filter => qr[^/root/node\d+$], keep_root => 1)),
+        Dumper(xml2hash(<<"XML", filter => qr[^/root/node\d+$], keep_root => 1, trim => 1)),
 $xml_decl_utf8
 <root>
     <node1>value1</node1>
@@ -73,13 +73,13 @@ XML
     }},
     { node3  => 'value3' },
 ]),
-        'filter3',
+        'regex',
     ;
 }
 
 {
     is
-        Dumper(xml2hash(<<"XML", filter => ['/root/node1', qr[node3$]], keep_root => 1)),
+        Dumper(xml2hash(<<"XML", filter => ['/root/node1', qr[node3$]], keep_root => 1, trim => 1)),
 $xml_decl_utf8
 <root>
     <node1>value1</node1>
@@ -93,13 +93,13 @@ XML
     { node1  => 'value1' },
     { node3  => 'value3' },
 ]),
-        'filter4',
+        'pattern and regex',
     ;
 }
 
 {
     is
-        Dumper(xml2hash(<<"XML", filter => ['/root/node5'], keep_root => 1)),
+        Dumper(xml2hash(<<"XML", filter => ['/root/node5'], keep_root => 1, trim => 1)),
 $xml_decl_utf8
 <root>
     <node1>value1</node1>
@@ -110,13 +110,13 @@ $xml_decl_utf8
 </root>
 XML
         Dumper([]),
-        'filter5',
+        'array with one pattern',
     ;
 }
 
 {
     my @nodes;
-    xml2hash(<<"XML", filter => qr[^/root/node\d+$], keep_root => 1, cb => sub { push @nodes, $_[0] });
+    xml2hash(<<"XML", filter => qr[^/root/node\d+$], keep_root => 1, trim => 1, cb => sub { push @nodes, $_[0] });
 $xml_decl_utf8
 <root>
     <node1>value1</node1>
@@ -136,6 +136,6 @@ XML
     }},
     { node3  => 'value3' },
 ]),
-        'filter6',
+        'use callback',
     ;
 }

@@ -572,37 +572,62 @@ PPCAT(loop, _SEARCH_ATTRIBUTE_VALUE):                                   \
 
 #define PARSE_CDATA                                                     \
     SCAN6(CDATA, 'C', 'D', 'A', 'T', 'A', '[')                          \
-        content = NULL;                                                 \
+        content = end = cur;                                            \
         DO(END_CDATA1)                                                  \
-            SKIP_BLANK                                                  \
             EXPECT_CHAR("1st ]", ']')                                   \
-                if (content == NULL) content = end = cur - 1;           \
                 DO(END_CDATA2)                                          \
                     EXPECT_CHAR("2nd ]", ']')                           \
                         DO(END_CDATA3)                                  \
+                            EXPECT_CHAR(">", '>')                       \
+                                end = cur - 3;                          \
+                                NEW_CDATA(content, end - content)       \
+                                goto PARSE_CONTENT;                     \
+                            EXPECT_CHAR("2nd ]", ']')                   \
+                                goto END_CDATA3_START;                  \
+                            EXPECT_ANY("any character")                 \
+                                goto END_CDATA1_START;                  \
+                        END(END_CDATA3)                                 \
+                    EXPECT_ANY("any character")                         \
+                        goto END_CDATA1_START;                          \
+                END(END_CDATA2)                                         \
+                ;                                                       \
+        END(END_CDATA1)                                                 \
+        goto INVALID_XML;                                               \
+    END6(CDATA, INVALID_XML)
+
+#define PARSE_CDATA_WITH_TRIM                                           \
+    SCAN6(CDATA_WITH_TRIM, 'C', 'D', 'A', 'T', 'A', '[')                \
+        content = NULL;                                                 \
+        DO(END_CDATA_WITH_TRIM1)                                        \
+            SKIP_BLANK                                                  \
+            EXPECT_CHAR("1st ]", ']')                                   \
+                if (content == NULL) content = end = cur - 1;           \
+                DO(END_CDATA_WITH_TRIM2)                                \
+                    EXPECT_CHAR("2nd ]", ']')                           \
+                        DO(END_CDATA_WITH_TRIM3)                        \
                             EXPECT_CHAR(">", '>')                       \
                                 NEW_CDATA(content, end - content)       \
                                 goto PARSE_CONTENT;                     \
                             EXPECT_CHAR("2nd ]", ']')                   \
                                 end = cur - 2;                          \
-                                goto END_CDATA3_START;                  \
+                                goto END_CDATA_WITH_TRIM3_START;        \
                             EXPECT_ANY("any character")                 \
                                 end = cur - 1;                          \
-                                goto END_CDATA1_START;                  \
-                        END(END_CDATA3)                                 \
+                                goto END_CDATA_WITH_TRIM1_START;        \
+                        END(END_CDATA_WITH_TRIM3)                       \
                     EXPECT_BLANK("skip blank")                          \
                         end = cur - 1;                                  \
-                        goto END_CDATA1_START;                          \
+                        goto END_CDATA_WITH_TRIM1_START;                \
                     EXPECT_ANY("any character")                         \
                         end = cur;                                      \
-                        goto END_CDATA1_START;                          \
-                END(END_CDATA2)                                         \
+                        goto END_CDATA_WITH_TRIM1_START;                \
+                END(END_CDATA_WITH_TRIM2)                               \
             EXPECT_ANY("any char")                                      \
                 if (content == NULL) content = cur - 1;                 \
                 end = cur;                                              \
-        END(END_CDATA1)                                                 \
+        END(END_CDATA_WITH_TRIM1)                                       \
         goto INVALID_XML;                                               \
-    END6(CDATA, INVALID_XML)
+    END6(CDATA_WITH_TRIM, INVALID_XML)
 
 #define NORMALIZE_REFERENCE(loop)                                       \
     _DO(PPCAT(loop, _REFERENCE))                                        \
@@ -794,16 +819,18 @@ xh_x2h_parse_chunk(xh_x2h_ctx_t *ctx, xh_char_t **buf, size_t *bytesleft, xh_boo
 
 PARSE_CONTENT:
     content = NULL;
-    flags &= ~XH_X2H_NEED_NORMALIZE;
+    flags &= ~(XH_X2H_NEED_NORMALIZE | XH_X2H_IS_NOT_BLANK);
     DO(CONTENT)
         EXPECT_CHAR("new element", '<')
             if (content != NULL) {
-                if (flags & XH_X2H_NEED_NORMALIZE) {
-                    NORMALIZE_TEXT(TEXT1, content, end - content)
-                    NEW_TEXT(enc, enc_len)
-                }
-                else {
-                    NEW_TEXT(content, end - content)
+                if (flags & XH_X2H_IS_NOT_BLANK) {
+                    if (flags & XH_X2H_NEED_NORMALIZE) {
+                        NORMALIZE_TEXT(TEXT1, content, end - content)
+                        NEW_TEXT(enc, enc_len)
+                    }
+                    else {
+                        NEW_TEXT(content, end - content)
+                    }
                 }
                 content = NULL;
             }
@@ -824,7 +851,14 @@ PARSE_CONTENT:
                         EXPECT_CHAR("comment", '-')
                             PARSE_COMMENT
                         EXPECT_CHAR("cdata", '[')
-                            PARSE_CDATA
+                            if (ctx->opts.trim) {
+                                PARSE_CDATA_WITH_TRIM
+                                ;
+                            }
+                            else {
+                                PARSE_CDATA
+                                ;
+                            }
                         EXPECT_ANY("wrong character")
                             goto INVALID_XML;
                     END(XML_COMMENT_NODE_OR_CDATA)
@@ -877,26 +911,34 @@ PARSE_CONTENT:
         EXPECT_CHAR("wrong symbol", '>')
             goto INVALID_XML;
         EXPECT_BLANK_WO_CR("blank")
+            if (!ctx->opts.trim)
+                goto START_CONTENT;
             break;
         EXPECT_CHAR("CR", '\r')
             if (content != NULL) {
                 flags |= XH_X2H_NORMALIZE_LINE_FEED;
             }
+            if (!ctx->opts.trim)
+                goto START_CONTENT;
             break;
         EXPECT_CHAR("reference", '&')
             flags |= XH_X2H_NORMALIZE_REF;
         EXPECT_ANY("any char")
+            flags |= XH_X2H_IS_NOT_BLANK;
+            START_CONTENT:
             if (content == NULL) content = cur - 1;
             end = cur;
     END(CONTENT)
 
     if (content != NULL) {
-        if (flags & XH_X2H_NEED_NORMALIZE) {
-            NORMALIZE_TEXT(TEXT2, content, end - content)
-            NEW_TEXT(enc, enc_len)
-        }
-        else {
-            NEW_TEXT(content, end - content)
+        if (flags & XH_X2H_IS_NOT_BLANK) {
+            if (flags & XH_X2H_NEED_NORMALIZE) {
+                NORMALIZE_TEXT(TEXT2, content, end - content)
+                NEW_TEXT(enc, enc_len)
+            }
+            else {
+                NEW_TEXT(content, end - content)
+            }
         }
         content = NULL;
     }

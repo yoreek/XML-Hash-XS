@@ -1,5 +1,9 @@
 Revision history for perl module XML::Hash::XS
 
+0.47    2017-02-18
+    - The "trim" option now is used while conversion of xml to hash
+        - Thanks to Useperl for report
+
 0.46    2017-01-28
     - Fix bug occurs while using multiple job compile
     - Fix configure error on OpenBSD: No library found for -liconv
