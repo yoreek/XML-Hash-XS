@@ -39,7 +39,7 @@ XML
                 'node1' => [ { content => '123' } ],
                 'node3' => [
                     {   'attr1'   => [ { content => 'attr1_content' } ],
-                        'content' => 'node3_content_1node3_content_2',
+                        'content' => ['node3_content_1', 'node3_content_2'],
                         'subnode3' => [
                             { content => 'subnode30_content' },
                             { content => 'subnode31_content' },
@@ -71,7 +71,7 @@ XML
 
 {
     is
-        Dumper(xml2hash(<<"XML", force_array => 1, merge_text => 1, keep_root => 1)),
+        Dumper(xml2hash(<<"XML", merge_text => 1, keep_root => 1)),
 <?xml version="1.0" encoding="utf-8"?>
 <root>
     <value><![CDATA[Hello,]]></value>
@@ -83,6 +83,6 @@ XML
                 'value' => ["Hello,", " world!\n"],
             },
         }),
-        'merge cdata with force_array option',
+        'don`t merge text from different nodes',
     ;
 }

@@ -116,26 +116,20 @@ xh_x2h_pass_matched_node(SV *cb, SV *val)
 #define SAVE_VALUE(lv, v , s, l)                                        \
     xh_log_trace2("save value: [%.*s]", l, s);                          \
     if ( SvOK(v) ) {                                                    \
-        if (ctx->opts.merge_text && !SvROK(v)) {                        \
-            xh_log_trace0("merge");                                     \
-            CAT_STRING(v, s, l);                                        \
+        xh_log_trace0("add to array");                                  \
+        /* get array if value is reference to array */                  \
+        if ( SvROK(v) && SvTYPE(SvRV(v)) == SVt_PVAV) {                 \
+            av = (AV *) SvRV(v);                                        \
         }                                                               \
+        /* create a new array and move value to array */                \
         else {                                                          \
-            xh_log_trace0("add to array");                              \
-            /* get array if value is reference to array */              \
-            if ( SvROK(v) && SvTYPE(SvRV(v)) == SVt_PVAV) {             \
-                av = (AV *) SvRV(v);                                    \
-            }                                                           \
-            /* create a new array and move value to array */            \
-            else {                                                      \
-                av = newAV();                                           \
-                *(lv) = newRV_noinc((SV *) av);                         \
-                av_store(av, 0, v);                                     \
-                (v) = *(lv);                                            \
-            }                                                           \
-            /* add value to array */                                    \
-            (lv) = av_store(av, av_len(av) + 1, NEW_STRING((s), (l)));  \
+            av = newAV();                                               \
+            *(lv) = newRV_noinc((SV *) av);                             \
+            av_store(av, 0, v);                                         \
+            (v) = *(lv);                                                \
         }                                                               \
+        /* add value to array */                                        \
+        (lv) = av_store(av, av_len(av) + 1, NEW_STRING((s), (l)));      \
     }                                                                   \
     else {                                                              \
         xh_log_trace0("set string");                                    \

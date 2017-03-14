@@ -7,7 +7,7 @@ use vars qw($VERSION @EXPORT @EXPORT_OK);
 use base 'Exporter';
 @EXPORT_OK = @EXPORT = qw( hash2xml xml2hash );
 
-$VERSION = '0.47';
+$VERSION = '0.48';
 
 require XSLoader;
 XSLoader::load('XML::Hash::XS', $VERSION);
@@ -230,7 +230,7 @@ This option is similar to "ForceContent" from XMl::Simple module: L<https://meta
 
 =item merge_text [ = 0 ] I<# xml2hash>
 
-Setting this option to "1" will cause merge adjacent test nodes.
+Setting this option to "1" will cause merge adjacent text nodes.
 
 =item xml_decl [ = 1 ] I<# hash2xml>
 

@@ -159,7 +159,7 @@ OPTIONS
         d>.
 
     merge_text [ = 0 ] *# xml2hash*
-        Setting this option to "1" will cause merge adjacent test nodes.
+        Setting this option to "1" will cause merge adjacent text nodes.
 
     xml_decl [ = 1 ] *# hash2xml*
         if xml_decl is "1", output will start with the XML declaration
