@@ -79,7 +79,6 @@ xh_encoder_create(xh_char_t *tocode, xh_char_t *fromcode)
         encoder->type = XH_ENC_ICONV;
         return encoder;
     }
-    iconv_close(encoder->iconv);
     encoder->iconv = NULL;
 #endif
 
