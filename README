@@ -18,7 +18,7 @@ SYNOPSIS
 
         use XML::Hash::XS qw();
 
-        my $conv   = XML::Hash::XS->new(utf8 => 0, encoding => 'utf8')
+        my $conv   = XML::Hash::XS->new(utf8 => 0, encoding => 'utf-8')
         my $xmlstr = $conv->hash2xml(\%hash, utf8 => 1);
         my $hash   = $conv->xml2hash($xmlstr, encoding => 'cp1251');
 
