@@ -71,7 +71,10 @@ xh_h2x_resolve_value(xh_h2x_ctx_t *ctx, SV *value, xh_uint_t *type)
         *type = 0;
 
         if (SvOBJECT(value)) {
-            if ((method = gv_fetchmethod_autoload(SvSTASH(value), "toString", 0)) != NULL) {
+            if (
+                  ((method = gv_fetchmethod_autoload(SvSTASH(value), "toString",  0)) != NULL)
+               || ((method = gv_fetchmethod_autoload(SvSTASH(value), "to_string", 0)) != NULL) 
+            ){
                 dSP;
 
                 ENTER; SAVETMPS; PUSHMARK(SP);
