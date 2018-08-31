@@ -2,7 +2,7 @@ package main;
 use strict;
 use warnings;
 
-use Test::More tests => 3;
+use Test::More tests => 5;
 use Data::Dumper;
 $Data::Dumper::Indent = 0;
 $Data::Dumper::Sortkeys = 1;
@@ -58,5 +58,31 @@ root => {
 },
 }),
         'if the trim is on',
+    ;
+}
+
+{
+    is
+        Dumper(xml2hash(<<"XML", trim => 1)),
+$xml_decl_utf8
+<root>
+    <text> </text>
+</root>\r\n
+XML
+        Dumper({ text   => '' }),
+        'when element contains only spaces and trim is on',
+    ;
+}
+
+{
+    is
+        Dumper(xml2hash(<<"XML", trim => 0)),
+$xml_decl_utf8
+<root>
+    <text> </text>
+</root>\r\n
+XML
+        Dumper({ text   => ' ' }),
+        'when element contains only spaces and trim is off',
     ;
 }
