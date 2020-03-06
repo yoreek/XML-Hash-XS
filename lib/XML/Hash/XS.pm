@@ -224,11 +224,11 @@ if defined that the key name for the text content(used only if use_attr=1).
 
 =item force_array => [ = undef ] I<# xml2hash>
 
-This option is similar to "ForceArray" from XMl::Simple module: L<https://metacpan.org/pod/XML::Simple#ForceArray-=%3E-1-%23-in-important>.
+This option is similar to "ForceArray" from XML::Simple module: L<https://metacpan.org/pod/XML::Simple#ForceArray-=%3E-1-%23-in-important>.
 
 =item force_content => [ = 0 ] I<# xml2hash>
 
-This option is similar to "ForceContent" from XMl::Simple module: L<https://metacpan.org/pod/XML::Simple#ForceContent-=%3E-1-%23-in-seldom-used>.
+This option is similar to "ForceContent" from XML::Simple module: L<https://metacpan.org/pod/XML::Simple#ForceContent-=%3E-1-%23-in-seldom-used>.
 
 =item merge_text [ = 0 ] I<# xml2hash>
 
