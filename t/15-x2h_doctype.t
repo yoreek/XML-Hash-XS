@@ -5,6 +5,7 @@ use warnings;
 use Test::More tests => 15;
 
 use XML::Hash::XS 'xml2hash';
+$XML::Hash::XS::keep_root = 0;
 
 {
     is
