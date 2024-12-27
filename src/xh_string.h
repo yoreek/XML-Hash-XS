@@ -4,7 +4,7 @@
 #include "xh_config.h"
 #include "xh_core.h"
 
-#if BYTE_ORDER == LITTLE_ENDIAN
+#ifdef XH_LITTLE_ENDIAN
 #define xh_str_equal2(p, c0, c1)                                        \
     ((((uint32_t *) (p))[0] & 0xffff) == ((c1 << 8) | c0))
 

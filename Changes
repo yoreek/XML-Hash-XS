@@ -1,5 +1,8 @@
 Revision history for perl module XML::Hash::XS
 
+0.61    2024-12-27
+    - Another fix for big endian.
+
 0.60    2024-12-24
     - Another fix for big endian.
 
