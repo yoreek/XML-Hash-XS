@@ -42,7 +42,7 @@
 #      include <sys/types.h>
 #    endif
 #    include <machine/endian.h>
-#  else
+#  elif defined(__linux__) || defined(__CYGWIN__)
 #    include <endian.h>
 #  endif
 #  ifndef LITTLE_ENDIAN
