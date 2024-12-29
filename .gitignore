@@ -7,8 +7,10 @@
 *.obj
 *.bs
 *.bak
+*.pdb
 *.tar.gz
 XS.c
+XS.def
 benchmark/uploads.rdf
 tools/
 
