@@ -118,11 +118,13 @@ xh_x2h_stream_feed(xh_x2h_stream_t *stream, xh_char_t *data, size_t len, xh_bool
         buf = data;
     }
 
-    xh_x2h_parse_chunk(ctx, &buf, &len, finish);
+    do {
+        xh_x2h_parse_chunk(ctx, &buf, &len, finish);
 
-    if (ctx->state == XML_DECL_FOUND && ctx->encoding[0] != '\0' &&
-        xh_strcasecmp(ctx->encoding, XH_INTERNAL_ENCODING) != 0)
-        croak("Incremental parser supports UTF-8 input only");
+        if (ctx->state == XML_DECL_FOUND && ctx->encoding[0] != '\0' &&
+            xh_strcasecmp(ctx->encoding, XH_INTERNAL_ENCODING) != 0)
+            croak("Incremental parser supports UTF-8 input only");
+    } while (len > 0);
 
     if (stream->tail.start == NULL && !finish) {
         preserve = ctx->node != NULL ? ctx->node : ctx->content;

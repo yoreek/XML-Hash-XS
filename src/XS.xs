@@ -157,6 +157,7 @@ feed(parser, input)
             croak("feed: parser is already destroyed");
         if (SvROK(input)) input = SvRV(input);
         data = XH_CHAR_CAST SvPV(input, len);
+        SvREFCNT_inc(parser);
         XCPT_TRY_START
         {
             xh_x2h_stream_feed(stream, data, (size_t) len, FALSE);
@@ -165,8 +166,10 @@ feed(parser, input)
         {
             stream->busy = FALSE;
             stream->failed = TRUE;
+            SvREFCNT_dec(parser);
             XCPT_RETHROW;
         }
+        SvREFCNT_dec(parser);
 
 SV *
 finish(parser)
@@ -180,6 +183,7 @@ finish(parser)
         stream = INT2PTR(xh_x2h_stream_t *, SvIV(SvRV(parser)));
         if (stream == NULL)
             croak("finish: parser is already destroyed");
+        SvREFCNT_inc(parser);
         XCPT_TRY_START
         {
             RETVAL = xh_x2h_stream_finish(stream);
@@ -188,8 +192,10 @@ finish(parser)
         {
             stream->busy = FALSE;
             stream->failed = TRUE;
+            SvREFCNT_dec(parser);
             XCPT_RETHROW;
         }
+        SvREFCNT_dec(parser);
     OUTPUT:
         RETVAL
 
