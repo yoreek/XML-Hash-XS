@@ -19,7 +19,7 @@ $VERSION = '0.64';
 require XSLoader;
 XSLoader::load('XML::Hash::XS', $VERSION);
 
-use vars qw($method $output $root $version $encoding $utf8 $indent $canonical
+use vars qw($method $output $output_cb $root $version $encoding $utf8 $indent $canonical
     $use_attr $content $xml_decl $doc $max_depth $attr $text $trim $cdata
     $comm $buf_size $keep_root $force_array $force_content $merge_text
     $suppress_empty $cb_mode
@@ -30,6 +30,7 @@ $method         = 'NATIVE';
 
 # native options
 $output         = undef;
+$output_cb      = undef;
 $root           = 'root';
 $version        = '1.0';
 $encoding       = '';
@@ -74,6 +75,7 @@ XML::Hash::XS - Simple and fast hash to XML and XML to hash conversion written i
 
     my $xmlstr = hash2xml \%hash;
     hash2xml \%hash, output => $fh;
+    hash2xml \%hash, output_cb => sub { my ($chunk) = @_; print $chunk };
 
     my $hash = xml2hash $xmlstr;
     my $hash = xml2hash \$xmlstr;
@@ -223,6 +225,13 @@ XML output method
 if output is undefined, XML document dumped into string.
 
 if output is FH, XML document writes directly to a filehandle or a stream.
+
+=item output_cb [ = undef ] I<# hash2xml>
+
+Callback invoked as C<< sub { my ($chunk) = @_ } >> for each generated XML
+chunk. The complete XML string is not accumulated and C<hash2xml> returns
+undef. Chunk size is controlled by C<buf_size>, except that a single value may
+require a larger chunk. C<output> and C<output_cb> are mutually exclusive.
 
 =item canonical [ = 0 ] I<# hash2xml>
 

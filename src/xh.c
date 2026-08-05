@@ -83,6 +83,9 @@ xh_init_opts(xh_opts_t *opts)
     else {
         opts->output = XH_DEF_OUTPUT;
     }
+    if ( (sv = get_sv("XML::Hash::XS::output_cb", 0)) != NULL ) {
+        xh_param_assign_cb(&opts->output_cb, "output_cb", sv);
+    }
 
     /* suppress empty */
     if ( (sv = get_sv("XML::Hash::XS::suppress_empty", 0)) != NULL ) {
@@ -137,6 +140,9 @@ xh_destroy_opts(xh_opts_t *opts)
 
     if (opts->output != NULL)
         SvREFCNT_dec(opts->output);
+
+    if (opts->output_cb != NULL)
+        SvREFCNT_dec(opts->output_cb);
 }
 
 void
@@ -154,6 +160,9 @@ xh_copy_opts(xh_opts_t *dst, xh_opts_t *src)
     }
     if (dst->output != NULL) {
         SvREFCNT_inc(dst->output);
+    }
+    if (dst->output_cb != NULL) {
+        SvREFCNT_inc(dst->output_cb);
     }
 }
 
@@ -302,6 +311,10 @@ xh_parse_param(xh_opts_t *opts, xh_int_t first, I32 ax, I32 items)
                 }
                 goto error;
             case 9:
+                if (xh_str_equal9(p, 'o', 'u', 't', 'p', 'u', 't', '_', 'c', 'b')) {
+                    xh_param_assign_cb(&opts->output_cb, "output_cb", v);
+                    break;
+                }
                 if (xh_str_equal9(p, 'c', 'a', 'n', 'o', 'n', 'i', 'c', 'a', 'l')) {
                     opts->canonical = xh_param_assign_bool(v);
                     break;
@@ -360,6 +373,10 @@ xh_parse_param(xh_opts_t *opts, xh_int_t first, I32 ax, I32 items)
         else {
             opts->method = XH_METHOD_NATIVE;
         }
+    }
+
+    if (opts->output != NULL && opts->output_cb != NULL) {
+        croak("Parameters 'output' and 'output_cb' are mutually exclusive");
     }
 
     return;
@@ -447,5 +464,8 @@ xh_merge_opts(xh_opts_t *ctx_opts, xh_opts_t *opts, xh_int_t nparam, I32 ax, I32
     }
     if (nparam < items) {
         xh_parse_param(ctx_opts, nparam, ax, items);
+    }
+    if (ctx_opts->output != NULL && ctx_opts->output_cb != NULL) {
+        croak("Parameters 'output' and 'output_cb' are mutually exclusive");
     }
 }

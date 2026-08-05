@@ -60,7 +60,7 @@ hash2xml(...)
             XCPT_RETHROW;
         }
 
-        if (ctx.opts.output != NULL) result = NULL;
+        if (ctx.opts.output != NULL || ctx.opts.output_cb != NULL) result = NULL;
 
         xh_h2x_destroy_ctx(&ctx);
 
