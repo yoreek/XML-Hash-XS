@@ -1,0 +1,248 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  PERL_MM_USE_DEFAULT: 1
+
+jobs:
+  linux:
+    name: "linux perl ${{ matrix.perl }}"
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # 5.8 covers MIN_PERL_VERSION => 5.008008 declared in Makefile.PL
+        perl: [ '5.8', '5.10', '5.14', '5.20', '5.26', '5.32', '5.36', '5.38', '5.40' ]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system libraries
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -qy libxml2-dev libicu-dev
+
+      - uses: shogo82148/actions-setup-perl@v1
+        with:
+          perl-version: ${{ matrix.perl }}
+          install-modules-with: cpanm
+
+      - run: perl -V
+
+      # Old perls ship a Test::More too old for done_testing()/subtest().
+      # Their EUMM writes no MYMETA either, so cpanm --installdeps finds
+      # nothing to do there and the prereq has to be named explicitly.
+      - run: cpanm --notest "Test::More~>=0.98"
+      - run: cpanm --notest --installdeps .
+
+      - run: perl Makefile.PL
+      - run: make
+      - run: make test
+
+  macos:
+    name: macos
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shogo82148/actions-setup-perl@v1
+        with:
+          perl-version: '5.38'
+          install-modules-with: cpanm
+
+      - run: perl -V
+      - run: cpanm --notest --installdeps .
+      - run: perl Makefile.PL
+      - run: make
+      - run: make test
+
+  windows:
+    # Covers the gcc build. The MSVC branch in Makefile.PL ($Config{cc} eq 'cl')
+    # stays uncovered: Strawberry Perl is built with gcc, so $IS_VC is never true here.
+    name: windows (strawberry)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shogo82148/actions-setup-perl@v1
+        with:
+          perl-version: '5.38'
+          distribution: strawberry
+          install-modules-with: cpanm
+
+      - run: perl -V
+      - run: cpanm --notest --installdeps .
+      - run: perl Makefile.PL
+      - run: gmake
+      - run: gmake test
+
+  big-endian:
+    # Guards against the class of bugs fixed in 0.61-0.64 (big endian, Sparc64).
+    # Runs under QEMU emulation, so it is slow but it is the only cheap way to
+    # get a big endian box.
+    name: big-endian (s390x)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: uraimo/run-on-arch-action@v2
+        with:
+          arch: s390x
+          distro: ubuntu22.04
+          githubToken: ${{ github.token }}
+          install: |
+            apt-get update -q
+            apt-get install -qy build-essential perl libxml2-dev libicu-dev
+          run: |
+            perl -V:byteorder
+            perl Makefile.PL
+            make
+            make test
+
+  dependencies:
+    # Makefile.PL probes libxml2 / ICU / iconv with Devel::CheckLib and sets
+    # -DXH_HAVE_* accordingly, so each combination compiles different code.
+    # Note: libxml2 is only used when XML::LibXML is also installed
+    # (see the "remove unneded libxml2" line in extra_config).
+    name: "deps: ${{ matrix.name }}"
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: minimal
+            packages: ''
+            remove: 'libxml2-dev libicu-dev'
+            libxml: false
+          - name: icu
+            packages: 'libicu-dev'
+            remove: 'libxml2-dev'
+            libxml: false
+          - name: libxml2
+            packages: 'libxml2-dev'
+            remove: 'libicu-dev'
+            libxml: true
+          - name: all
+            packages: 'libxml2-dev libicu-dev'
+            remove: ''
+            libxml: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Adjust system libraries
+        run: |
+          sudo apt-get update -q
+          if [ -n "${{ matrix.remove }}" ]; then
+            sudo apt-get remove -qy ${{ matrix.remove }} || true
+          fi
+          if [ -n "${{ matrix.packages }}" ]; then
+            sudo apt-get install -qy ${{ matrix.packages }}
+          fi
+
+      - uses: shogo82148/actions-setup-perl@v1
+        with:
+          perl-version: '5.38'
+          install-modules-with: cpanm
+
+      - run: cpanm --notest --installdeps .
+
+      - name: Install XML::LibXML
+        if: matrix.libxml
+        run: cpanm --notest XML::LibXML
+
+      # The probe results are printed by Makefile.PL, keep them in the log
+      - run: perl Makefile.PL
+      - run: make
+      - run: make test
+
+  valgrind:
+    # The XS layer manages SV refcounts by hand; leaks there are invisible to
+    # make test. Only "definite" leaks fail the job - "still reachable" blocks
+    # are normal for a perl interpreter. If the system perl turns out to produce
+    # false positives here, add --suppressions=<file> rather than dropping the job.
+    name: valgrind
+    runs-on: ubuntu-22.04
+    env:
+      PERL_DESTRUCT_LEVEL: 2
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system libraries
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -qy valgrind libxml2-dev libicu-dev
+
+      - run: perl Makefile.PL
+      - run: make
+
+      - name: Run tests under valgrind
+        run: |
+          status=0
+          for t in t/*.t; do
+            echo "== $t"
+            valgrind --error-exitcode=99 \
+                     --leak-check=full \
+                     --show-leak-kinds=definite \
+                     --errors-for-leak-kinds=definite \
+                     --num-callers=40 \
+                     perl -Mblib "$t" > /dev/null || status=1
+          done
+          exit $status
+
+  author:
+    # xt/*.t are only added to TESTS when AUTHOR_TESTING is set at
+    # "perl Makefile.PL" time, hence the variable on both steps.
+    name: author tests
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system libraries
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -qy libxml2-dev libicu-dev
+
+      - uses: shogo82148/actions-setup-perl@v1
+        with:
+          perl-version: '5.38'
+          install-modules-with: cpanm
+
+      - name: Install develop prereqs (Test::Pod, Test::Perl::Critic, ...)
+        run: cpanm --notest --with-develop --installdeps .
+
+      - run: AUTHOR_TESTING=1 perl Makefile.PL
+      - run: make
+      - run: AUTHOR_TESTING=1 make test
+        env:
+          AUTHOR_TESTING: 1
+
+  distribution:
+    # Catches files that exist in the repo but were never added to MANIFEST -
+    # they silently disappear from the CPAN tarball.
+    name: distribution
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system libraries
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -qy libxml2-dev libicu-dev
+
+      - run: perl Makefile.PL
+
+      - name: Check MANIFEST
+        run: |
+          perl -MExtUtils::Manifest=fullcheck -e '
+              my ($missing, $extra) = fullcheck;
+              print "missing from disk: $_\n" for @$missing;
+              print "not in MANIFEST: $_\n"   for @$extra;
+              exit(@$missing || @$extra ? 1 : 0);
+          '
+
+      - name: Build the tarball and test it
+        run: make disttest
