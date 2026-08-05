@@ -1,6 +1,6 @@
 .*
 !.gitignore
-!.travis.yml
+!.github
 *~
 *.sw[a-p]
 *.o

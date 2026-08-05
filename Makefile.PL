@@ -73,6 +73,15 @@ my %WriteMakefileArgs = (
                     'Data::Dumper'    => 0,
                 },
             },
+            # modules required by the author tests in xt/,
+            # install with: cpanm --with-develop --installdeps .
+            develop => {
+                requires => {
+                    'Test::Pod'           => 1.22,
+                    'Test::Perl::Critic'  => 0,
+                    'Test::CPAN::Changes' => 0,
+                },
+            },
         },
     },
     MIN_PERL_VERSION => 5.008008,

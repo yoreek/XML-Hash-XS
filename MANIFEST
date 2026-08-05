@@ -67,6 +67,7 @@ t/18-oop-lifetime.t
 t/19-x2h-incremental.t
 t/20-x2h-incremental-boundaries.t
 t/21-x2h-callback-control.t
+t/22-h2x-output-cb.t
 t/test.xml
 t/test_cp1251.xml
 t/test_cp1251_wo_decl.xml

@@ -65,7 +65,7 @@ XML::Hash::XS - Simple and fast hash to XML and XML to hash conversion written i
 
 =begin HTML
 
-<p><a href="https://metacpan.org/pod/XML::Hash::XS" target="_blank"><img alt="CPAN version" src="https://badge.fury.io/pl/XML-Hash-XS.svg"></a> <a href="https://travis-ci.org/yoreek/XML-Hash-XS" target="_blank"><img title="Build Status Images" src="https://travis-ci.org/yoreek/XML-Hash-XS.svg"></a></p>
+<p><a href="https://metacpan.org/pod/XML::Hash::XS" target="_blank"><img alt="CPAN version" src="https://badge.fury.io/pl/XML-Hash-XS.svg"></a> <a href="https://github.com/yoreek/XML-Hash-XS/actions/workflows/ci.yml" target="_blank"><img title="CI status" alt="CI status" src="https://github.com/yoreek/XML-Hash-XS/actions/workflows/ci.yml/badge.svg?branch=master"></a></p>
 
 =end HTML
 
