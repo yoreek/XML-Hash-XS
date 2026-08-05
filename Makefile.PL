@@ -89,6 +89,9 @@ my %WriteMakefileArgs = (
     CCFLAGS          => $Config{ccflags} . ( $IS_VC ? ' /Fosrc/' : ' -o $@' ),
     OBJECT           => q/$(O_FILES)/,
     XS               => { 'src/XS.xs' => 'src/XS.c',  },
+    # ExtUtils::ParseXS before perl 5.22 chdirs into the directory of the .xs
+    # file, so a relative typemap path is looked up in src/ and never found.
+    TYPEMAPS         => [ File::Spec->rel2abs('typemap') ],
     C                => [ 'src/XS.c', glob('src/*.c') ],
     H                => [ glob('src/*.h') ],
     clean            => { FILES => 'src/*.o* *.o* src/*.pdb *.pdb' },

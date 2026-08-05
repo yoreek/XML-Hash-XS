@@ -6,6 +6,9 @@ Revision history for perl module XML::Hash::XS
     - Add streaming hash2xml output_cb callback.
     - Fix option and output filehandle ownership in OOP converters.
     - Add boundary, callback, and memory-safety regression tests.
+    - Fix build with perl older than 5.22, where xsubpp failed to find the typemap.
+    - Fix memory leak of the sorted hash when a callback dies in canonical mode.
+    - Add GitHub Actions CI.
 
 0.64    2025-01-01
     - Fix for Sparc64.
