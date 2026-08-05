@@ -33,7 +33,10 @@ jobs:
 
       - run: perl -V
 
-      # Old perls ship a Test::More too old for done_testing()/subtest()
+      # Old perls ship a Test::More too old for done_testing()/subtest().
+      # Their EUMM writes no MYMETA either, so cpanm --installdeps finds
+      # nothing to do there and the prereq has to be named explicitly.
+      - run: cpanm --notest "Test::More~>=0.98"
       - run: cpanm --notest --installdeps .
 
       - run: perl Makefile.PL
