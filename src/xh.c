@@ -1,6 +1,27 @@
 #include "xh_config.h"
 #include "xh_core.h"
 
+static void
+xh_assign_cb_mode(xh_opts_t *opts, SV *value)
+{
+    xh_char_t *mode;
+    STRLEN len;
+
+    if (!SvOK(value))
+        croak("Parameter 'cb_mode' is undefined");
+
+    mode = XH_CHAR_CAST SvPV(value, len);
+    if (len == 4 && xh_strncmp(mode, XH_CHAR_CAST "node", 4) == 0) {
+        opts->cb_mode = XH_CB_MODE_NODE;
+    }
+    else if (len == 6 && xh_strncmp(mode, XH_CHAR_CAST "events", 6) == 0) {
+        opts->cb_mode = XH_CB_MODE_EVENTS;
+    }
+    else {
+        croak("Invalid parameter value for 'cb_mode': %s", mode);
+    }
+}
+
 xh_bool_t
 xh_init_opts(xh_opts_t *opts)
 {
@@ -28,6 +49,12 @@ xh_init_opts(xh_opts_t *opts)
     XH_PARAM_READ_PATTERN(opts->force_array,   "XML::Hash::XS::force_array",   XH_DEF_FORCE_ARRAY);
     XH_PARAM_READ_BOOL   (opts->force_content, "XML::Hash::XS::force_content", XH_DEF_FORCE_CONTENT);
     XH_PARAM_READ_BOOL   (opts->merge_text,    "XML::Hash::XS::merge_text",    XH_DEF_MERGE_TEXT);
+    if ( (sv = get_sv("XML::Hash::XS::cb_mode", 0)) != NULL ) {
+        xh_assign_cb_mode(opts, sv);
+    }
+    else {
+        opts->cb_mode = XH_CB_MODE_NODE;
+    }
 
     /* XML::Hash::LX options */
     XH_PARAM_READ_STRING (opts->attr,          "XML::Hash::XS::attr",          XH_DEF_ATTR);
@@ -243,6 +270,10 @@ xh_parse_param(xh_opts_t *opts, xh_int_t first, I32 ax, I32 items)
                 }
                 goto error;
             case 7:
+                if (xh_str_equal7(p, 'c', 'b', '_', 'm', 'o', 'd', 'e')) {
+                    xh_assign_cb_mode(opts, v);
+                    break;
+                }
                 if (xh_str_equal7(p, 'c', 'o', 'n', 't', 'e', 'n', 't')) {
                     xh_param_assign_string(opts->content, v);
                     break;

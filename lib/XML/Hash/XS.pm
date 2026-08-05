@@ -5,7 +5,14 @@ use strict;
 use warnings;
 use vars qw($VERSION @EXPORT @EXPORT_OK);
 use base 'Exporter';
-@EXPORT_OK = @EXPORT = qw( hash2xml xml2hash );
+@EXPORT = qw( hash2xml xml2hash );
+@EXPORT_OK = (@EXPORT, qw(
+    XML_HASH_XS_CONTINUE XML_HASH_XS_STOP XML_HASH_XS_SKIP
+));
+
+sub XML_HASH_XS_CONTINUE () { 'XML_HASH_XS_CONTINUE' }
+sub XML_HASH_XS_STOP     () { 'XML_HASH_XS_STOP' }
+sub XML_HASH_XS_SKIP     () { 'XML_HASH_XS_SKIP' }
 
 $VERSION = '0.64';
 
@@ -15,7 +22,7 @@ XSLoader::load('XML::Hash::XS', $VERSION);
 use vars qw($method $output $root $version $encoding $utf8 $indent $canonical
     $use_attr $content $xml_decl $doc $max_depth $attr $text $trim $cdata
     $comm $buf_size $keep_root $force_array $force_content $merge_text
-    $suppress_empty
+    $suppress_empty $cb_mode
 );
 
 # 'NATIVE' or 'LX'
@@ -41,6 +48,7 @@ $force_array    = undef;
 $force_content  = 0;
 $merge_text     = 0;
 $suppress_empty = 0;
+$cb_mode        = 'node';
 
 # XML::Hash::LX options
 $attr           = '-';
@@ -312,6 +320,24 @@ Sample:
     # 111
     # 222
     # 333
+
+The callback may return C<XML_HASH_XS_STOP> to stop successfully after the
+current matched node. Other return values preserve the legacy behaviour and
+continue parsing.
+
+=item cb_mode [ = 'node' ] I<# xml2hash>
+
+With C<cb_mode =E<gt> 'events'> the callback receives
+C<($event, $value, $meta)>. A C<start> event contains element C<name>, C<path>,
+C<depth> and C<attributes> in C<$meta>. Returning C<XML_HASH_XS_SKIP> from
+C<start> skips construction of the element contents and suppresses its
+C<end> event. C<end> receives the completed node in C<$value>.
+
+The control constants are imported explicitly:
+
+    use XML::Hash::XS qw(
+        XML_HASH_XS_CONTINUE XML_HASH_XS_STOP XML_HASH_XS_SKIP
+    );
 
 =item method [ = 'NATIVE' ] I<# hash2xml>
 

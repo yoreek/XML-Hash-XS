@@ -15,6 +15,8 @@
 #define XH_X2H_DOCTYPE_FOUND        64
 #define XH_X2H_TEXT_NODE            128
 #define XH_X2H_TAG_EXISTS           256
+#define XH_X2H_STOPPED              512
+#define XH_X2H_SKIP_SUBTREE         1024
 
 #define XH_X2H_NEED_NORMALIZE       (XH_X2H_NORMALIZE_REF |             \
                                      XH_X2H_NORMALIZE_LINE_FEED)
@@ -154,7 +156,7 @@ typedef struct {
     unsigned int        flags;
     xh_x2h_node_t      *nodes;
     SV                **lval;
-    unsigned int        depth, real_depth, code;
+    unsigned int        depth, real_depth, code, skip_depth;
     xh_x2h_state_t      state;
     xh_reader_t         reader;
     SV                 *result, *input;
@@ -167,6 +169,7 @@ typedef struct {
     xh_bool_t      finished;
     xh_bool_t      failed;
     xh_bool_t      busy;
+    xh_bool_t      stopped;
 } xh_x2h_stream_t;
 
 SV *xh_x2h(xh_x2h_ctx_t *ctx);
