@@ -68,8 +68,10 @@ my %WriteMakefileArgs = (
                 },
             },
             test => {
+                # 0.98 for done_testing() and subtest(), used by the
+                # incremental parser and callback tests
                 requires => {
-                    'Test::More'      => 0,
+                    'Test::More'      => 0.98,
                     'Data::Dumper'    => 0,
                 },
             },

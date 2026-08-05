@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 
-use Test::More;
+use Test::More 0.98;
 use XML::Hash::XS qw(
     xml2hash
     XML_HASH_XS_CONTINUE

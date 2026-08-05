@@ -3,7 +3,7 @@ use warnings;
 use utf8;
 
 use Encode qw(encode);
-use Test::More;
+use Test::More 0.98;
 use XML::Hash::XS qw(xml2hash);
 
 ok(!XML::Hash::XS->can('new_parser'), 'legacy converter factory is not exposed');

@@ -29,8 +29,12 @@ jobs:
       - uses: shogo82148/actions-setup-perl@v1
         with:
           perl-version: ${{ matrix.perl }}
+          install-modules-with: cpanm
 
       - run: perl -V
+
+      # Old perls ship a Test::More too old for done_testing()/subtest()
+      - run: cpanm --notest --installdeps .
 
       - run: perl Makefile.PL
       - run: make
@@ -45,8 +49,10 @@ jobs:
       - uses: shogo82148/actions-setup-perl@v1
         with:
           perl-version: '5.38'
+          install-modules-with: cpanm
 
       - run: perl -V
+      - run: cpanm --notest --installdeps .
       - run: perl Makefile.PL
       - run: make
       - run: make test
@@ -63,8 +69,10 @@ jobs:
         with:
           perl-version: '5.38'
           distribution: strawberry
+          install-modules-with: cpanm
 
       - run: perl -V
+      - run: cpanm --notest --installdeps .
       - run: perl Makefile.PL
       - run: gmake
       - run: gmake test
@@ -136,6 +144,8 @@ jobs:
         with:
           perl-version: '5.38'
           install-modules-with: cpanm
+
+      - run: cpanm --notest --installdeps .
 
       - name: Install XML::LibXML
         if: matrix.libxml

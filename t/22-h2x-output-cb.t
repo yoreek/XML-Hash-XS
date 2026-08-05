@@ -2,7 +2,7 @@ package main;
 use strict;
 use warnings;
 
-use Test::More;
+use Test::More 0.98;
 use Scalar::Util qw(weaken);
 
 use XML::Hash::XS qw(hash2xml);
