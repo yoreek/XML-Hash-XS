@@ -81,6 +81,16 @@ Or OOP way:
     my $xmlstr = $conv->hash2xml(\%hash, utf8 => 1);
     my $hash   = $conv->xml2hash($xmlstr, encoding => 'cp1251');
 
+For incremental XML input, create a parser:
+
+    my $parser = XML::Hash::XS::Parser->new(keep_root => 1);
+    $parser->feed('<root><item>one</item>');
+    $parser->feed('<item>two</item></root>');
+    my $hash = $parser->finish;
+
+Chunks must be UTF-8; bytes are retained only when a token spans two calls
+to C<feed>.
+
 =head1 DESCRIPTION
 
 This module implements simple hash to XML and XML to hash conversion written in C.

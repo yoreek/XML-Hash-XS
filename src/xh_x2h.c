@@ -3,6 +3,8 @@
 
 static const char DEF_CONTENT_KEY[] = "content";
 
+static void xh_x2h_parse_chunk(xh_x2h_ctx_t *ctx, xh_char_t **buf, size_t *bytesleft, xh_bool_t terminate);
+
 void
 xh_x2h_destroy_ctx(xh_x2h_ctx_t *ctx)
 {
@@ -28,6 +30,150 @@ xh_x2h_init_ctx(xh_x2h_ctx_t *ctx, I32 ax, I32 items)
         croak("Memory allocation error");
     }
     memset(ctx->nodes, 0, sizeof(xh_x2h_node_t) * ctx->opts.max_depth);
+}
+
+static void
+xh_x2h_init_result(xh_x2h_ctx_t *ctx)
+{
+    if (ctx->opts.filter.enable) {
+        ctx->flags |= XH_X2H_FILTER_ENABLED;
+        if (ctx->opts.cb == NULL)
+            ctx->result = newRV_noinc((SV *) newAV());
+    }
+    else {
+        ctx->result = newRV_noinc((SV *) newHV());
+        ctx->nodes[0].lval = ctx->lval = &ctx->result;
+    }
+}
+
+static void
+xh_x2h_adjust_pointers(xh_x2h_ctx_t *ctx, xh_char_t *from, xh_char_t *to)
+{
+    intptr_t delta = (intptr_t) to - (intptr_t) from;
+
+    if (ctx->node != NULL) ctx->node += delta;
+    if (ctx->content != NULL) ctx->content += delta;
+    if (ctx->end != NULL) ctx->end += delta;
+    if (ctx->end_of_attr_value != NULL) ctx->end_of_attr_value += delta;
+}
+
+void
+xh_x2h_stream_init(xh_x2h_stream_t *stream, xh_opts_t *opts, I32 ax, I32 items)
+{
+    xh_x2h_ctx_t *ctx = &stream->ctx;
+
+    memset(stream, 0, sizeof(*stream));
+    xh_merge_opts(&ctx->opts, opts, 1, ax, items);
+    if (ctx->opts.encoding[0] != '\0' &&
+        xh_strcasecmp(ctx->opts.encoding, XH_INTERNAL_ENCODING) != 0)
+        croak("Incremental parser supports UTF-8 input only");
+    if ((ctx->nodes = malloc(sizeof(xh_x2h_node_t) * ctx->opts.max_depth)) == NULL)
+        croak("Memory allocation error");
+    memset(ctx->nodes, 0, sizeof(xh_x2h_node_t) * ctx->opts.max_depth);
+    xh_x2h_init_result(ctx);
+}
+
+void
+xh_x2h_stream_destroy(xh_x2h_stream_t *stream)
+{
+    if (stream->ctx.result != NULL)
+        SvREFCNT_dec(stream->ctx.result);
+    xh_buffer_destroy(&stream->tail);
+    xh_x2h_destroy_ctx(&stream->ctx);
+}
+
+void
+xh_x2h_stream_feed(xh_x2h_stream_t *stream, xh_char_t *data, size_t len, xh_bool_t finish)
+{
+    xh_x2h_ctx_t *ctx = &stream->ctx;
+    xh_char_t *buf, *preserve, *old_start;
+    size_t input_len = len, saved_len;
+
+    if (stream->finished) croak("Parser is already finished");
+    if (stream->failed) croak("Parser is in failed state");
+    if (stream->busy) croak("Recursive feed on the same parser");
+    stream->busy = TRUE;
+
+    preserve = ctx->node != NULL ? ctx->node : ctx->content;
+    if (stream->tail.start != NULL) {
+        if (preserve == NULL) {
+            stream->tail.cur = stream->tail.start;
+        }
+        else {
+            saved_len = stream->tail.cur - preserve;
+            if (preserve != stream->tail.start)
+                xh_memmove(stream->tail.start, preserve, saved_len);
+            xh_x2h_adjust_pointers(ctx, preserve, stream->tail.start);
+            stream->tail.cur = stream->tail.start + saved_len;
+        }
+        old_start = stream->tail.start;
+        xh_buffer_grow(&stream->tail, len);
+        if (old_start != stream->tail.start)
+            xh_x2h_adjust_pointers(ctx, old_start, stream->tail.start);
+        buf = stream->tail.cur;
+        if (len) memcpy(buf, data, len);
+        stream->tail.cur += len;
+    }
+    else {
+        buf = data;
+    }
+
+    xh_x2h_parse_chunk(ctx, &buf, &len, finish);
+
+    if (ctx->state == XML_DECL_FOUND && ctx->encoding[0] != '\0' &&
+        xh_strcasecmp(ctx->encoding, XH_INTERNAL_ENCODING) != 0)
+        croak("Incremental parser supports UTF-8 input only");
+
+    if (stream->tail.start == NULL && !finish) {
+        preserve = ctx->node != NULL ? ctx->node : ctx->content;
+        if (preserve != NULL) {
+            saved_len = (data + input_len) - preserve;
+            xh_buffer_init(&stream->tail, saved_len);
+            memcpy(stream->tail.start, preserve, saved_len);
+            stream->tail.cur = stream->tail.start + saved_len;
+            xh_x2h_adjust_pointers(ctx, preserve, stream->tail.start);
+        }
+    }
+
+    stream->busy = FALSE;
+}
+
+SV *
+xh_x2h_stream_finish(xh_x2h_stream_t *stream)
+{
+    xh_x2h_ctx_t *ctx = &stream->ctx;
+    HV *hv;
+    HE *he;
+    SV *result, *root;
+    xh_char_t empty = '\0';
+
+    xh_x2h_stream_feed(stream, &empty, 0, TRUE);
+    if (ctx->state != PARSER_ST_DONE)
+        croak("Invalid XML");
+    stream->finished = TRUE;
+
+    result = ctx->result;
+    ctx->result = NULL;
+    if (ctx->opts.filter.enable) {
+        if (ctx->opts.cb != NULL) {
+            SvREFCNT_dec(result);
+            result = NULL;
+        }
+    }
+    else if (!ctx->opts.keep_root) {
+        root = result;
+        hv = (HV *) SvRV(root);
+        hv_iterinit(hv);
+        if ((he = hv_iternext(hv))) {
+            result = hv_iterval(hv, he);
+            SvREFCNT_inc(result);
+        }
+        else {
+            result = NULL;
+        }
+        SvREFCNT_dec(root);
+    }
+    return result;
 }
 
 XH_INLINE void
@@ -1256,15 +1402,7 @@ xh_x2h(xh_x2h_ctx_t *ctx)
     dXCPT;
     XCPT_TRY_START
     {
-        if (ctx->opts.filter.enable) {
-            ctx->flags |= XH_X2H_FILTER_ENABLED;
-            if (ctx->opts.cb == NULL)
-                ctx->result = newRV_noinc((SV *) newAV());
-        }
-        else {
-            ctx->result = newRV_noinc((SV *) newHV());
-            ctx->nodes[0].lval = ctx->lval = &ctx->result;
-        }
+        xh_x2h_init_result(ctx);
 
         xh_reader_init(&ctx->reader, ctx->input, ctx->opts.encoding, ctx->opts.buf_size);
 

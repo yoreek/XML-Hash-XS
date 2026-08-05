@@ -64,6 +64,7 @@ t/15-x2h_doctype.t
 t/16-x2h_suppress_empty.t
 t/17-x2h_stylesheet.t
 t/18-oop-lifetime.t
+t/19-x2h-incremental.t
 t/test.xml
 t/test_cp1251.xml
 t/test_cp1251_wo_decl.xml
