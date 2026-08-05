@@ -60,7 +60,7 @@ typedef struct {
     xh_bool_t              canonical;
     xh_char_t              content[XH_PARAM_LEN];
     xh_int_t               indent;
-    void                  *output;
+    SV                    *output;
 #ifdef XH_HAVE_DOM
     xh_bool_t              doc;
 #endif

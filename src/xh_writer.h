@@ -27,7 +27,7 @@ SV *xh_writer_flush_buffer(xh_writer_t *writer, xh_perl_buffer_t *buf);
 SV *xh_writer_flush(xh_writer_t *writer);
 void xh_writer_resize_buffer(xh_writer_t *writer, size_t inc);
 void xh_writer_destroy(xh_writer_t *writer);
-void xh_writer_init(xh_writer_t *writer, xh_char_t *encoding, void *output, size_t size, xh_uint_t indent, xh_bool_t trim);
+void xh_writer_init(xh_writer_t *writer, xh_char_t *encoding, SV *output, size_t size, xh_uint_t indent, xh_bool_t trim);
 
 XH_INLINE void
 xh_writer_write_to_perl_obj(xh_perl_buffer_t *buf, SV *perl_obj)

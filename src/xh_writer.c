@@ -85,7 +85,7 @@ xh_writer_destroy(xh_writer_t *writer)
 }
 
 void
-xh_writer_init(xh_writer_t *writer, xh_char_t *encoding, void *output, size_t size, xh_uint_t indent, xh_bool_t trim)
+xh_writer_init(xh_writer_t *writer, xh_char_t *encoding, SV *output, size_t size, xh_uint_t indent, xh_bool_t trim)
 {
     writer->indent = indent;
     writer->trim   = trim;
@@ -107,8 +107,14 @@ xh_writer_init(xh_writer_t *writer, xh_char_t *encoding, void *output, size_t si
 
     if (output != NULL) {
         MAGIC  *mg;
-        GV     *gv = (GV *) output;
-        IO     *io = GvIO(gv);
+        GV     *gv;
+        IO     *io;
+
+        if (SvTYPE(output) != SVt_PVGV)
+            croak("Can't use file handle as a PerlIO handle");
+
+        gv = (GV *) output;
+        io = GvIO(gv);
 
         if (!io)
             croak("Can't use file handle as a PerlIO handle");

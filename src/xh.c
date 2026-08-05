@@ -50,7 +50,12 @@ xh_init_opts(xh_opts_t *opts)
     }
 
     /* output, NULL - to string */
-    XH_PARAM_READ_REF    (opts->output,        "XML::Hash::XS::output",        XH_DEF_OUTPUT);
+    if ( (sv = get_sv("XML::Hash::XS::output", 0)) != NULL ) {
+        xh_param_assign_output(&opts->output, sv);
+    }
+    else {
+        opts->output = XH_DEF_OUTPUT;
+    }
 
     /* suppress empty */
     if ( (sv = get_sv("XML::Hash::XS::suppress_empty", 0)) != NULL ) {
@@ -102,6 +107,9 @@ xh_destroy_opts(xh_opts_t *opts)
 
     if (opts->cb != NULL)
         SvREFCNT_dec(opts->cb);
+
+    if (opts->output != NULL)
+        SvREFCNT_dec(opts->output);
 }
 
 void
@@ -110,6 +118,15 @@ xh_copy_opts(xh_opts_t *dst, xh_opts_t *src)
     memcpy(dst, src, sizeof(xh_opts_t));
     if (dst->force_array.expr != NULL) {
         SvREFCNT_inc(dst->force_array.expr);
+    }
+    if (dst->filter.expr != NULL) {
+        SvREFCNT_inc(dst->filter.expr);
+    }
+    if (dst->cb != NULL) {
+        SvREFCNT_inc(dst->cb);
+    }
+    if (dst->output != NULL) {
+        SvREFCNT_inc(dst->output);
     }
 }
 
@@ -138,7 +155,7 @@ xh_parse_param(xh_opts_t *opts, xh_int_t first, I32 ax, I32 items)
         switch (len) {
             case 2:
                 if (xh_str_equal2(p, 'c', 'b')) {
-                    opts->cb = xh_param_assign_cb("cb", v);
+                    xh_param_assign_cb(&opts->cb, "cb", v);
                     break;
                 }
                 goto error;
@@ -217,12 +234,7 @@ xh_parse_param(xh_opts_t *opts, xh_int_t first, I32 ax, I32 items)
                     break;
                 }
                 if (xh_str_equal6(p, 'o', 'u', 't', 'p', 'u', 't')) {
-                    if ( SvOK(v) && SvROK(v) ) {
-                        opts->output = SvRV(v);
-                    }
-                    else {
-                        opts->output = NULL;
-                    }
+                    xh_param_assign_output(&opts->output, v);
                     break;
                 }
                 if (xh_str_equal6(p, 'f', 'i', 'l', 't', 'e', 'r')) {
@@ -406,4 +418,3 @@ xh_merge_opts(xh_opts_t *ctx_opts, xh_opts_t *opts, xh_int_t nparam, I32 ax, I32
         xh_parse_param(ctx_opts, nparam, ax, items);
     }
 }
-
