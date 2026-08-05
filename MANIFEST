@@ -38,6 +38,7 @@ src/xh_stack.c
 src/xh_stack.h
 src/xh_stash.c
 src/xh_stash.h
+src/typemap
 src/xh_string.h
 src/xh_writer.c
 src/xh_writer.h
@@ -73,7 +74,6 @@ t/test_cp1251.xml
 t/test_cp1251_wo_decl.xml
 t/test_null_terminated.xml
 t/test_utf8.xml
-typemap
 xt/91-pod-syntax.t
 xt/92-critic.t
 xt/93-changes.t

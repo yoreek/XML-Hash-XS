@@ -91,7 +91,9 @@ my %WriteMakefileArgs = (
     XS               => { 'src/XS.xs' => 'src/XS.c',  },
     # ExtUtils::ParseXS before perl 5.22 chdirs into the directory of the .xs
     # file, so a relative typemap path is looked up in src/ and never found.
-    TYPEMAPS         => [ File::Spec->rel2abs('typemap') ],
+    # The file lives in src/ so that MakeMaker does not also add a bare
+    # "typemap" argument of its own, which would hit the same problem.
+    TYPEMAPS         => [ File::Spec->rel2abs(File::Spec->catfile('src', 'typemap')) ],
     C                => [ 'src/XS.c', glob('src/*.c') ],
     H                => [ glob('src/*.h') ],
     clean            => { FILES => 'src/*.o* *.o* src/*.pdb *.pdb' },
